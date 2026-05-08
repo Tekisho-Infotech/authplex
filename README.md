@@ -13,6 +13,8 @@
 [![Last Commit](https://img.shields.io/github/last-commit/authplex/authplex)](https://github.com/authplex/authplex/commits/main)
 [![Repo Size](https://img.shields.io/github/repo-size/authplex/authplex)](https://github.com/authplex/authplex)
 [![Docker Image Size](https://img.shields.io/badge/docker-~20MB-2496ED?logo=docker)](https://github.com/authplex/authplex)
+[![Downloads](https://img.shields.io/github/downloads/authplex/authplex/total?label=downloads)](https://github.com/authplex/authplex/releases)
+[![Latest Release](https://img.shields.io/github/v/release/authplex/authplex?label=release)](https://github.com/authplex/authplex/releases)
 
 AuthPlex is a lightweight, multi-tenant IAM engine that provides OIDC/OAuth 2.0 authentication and authorization for any tech stack. No UI — pure API. ~20MB Docker image. 812 tests. 80%+ coverage.
 
