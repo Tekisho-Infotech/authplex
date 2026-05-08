@@ -2,7 +2,19 @@
 
 **Headless Identity & Access Management Engine**
 
-AuthPlex is a lightweight, multi-tenant IAM engine that provides OIDC/OAuth 2.0 authentication and authorization for any tech stack. No UI — pure API. ~20MB Docker image. 720 tests. 85% coverage.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](go.mod)
+[![Build](https://img.shields.io/github/actions/workflow/status/authplex/authplex/ci.yml?branch=main&label=build)](https://github.com/authplex/authplex/actions)
+[![Coverage](https://img.shields.io/badge/coverage-80%25+-brightgreen)](https://github.com/authplex/authplex)
+[![Tests](https://img.shields.io/badge/tests-812-brightgreen)](https://github.com/authplex/authplex)
+[![GitHub Stars](https://img.shields.io/github/stars/authplex/authplex?style=social)](https://github.com/authplex/authplex/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/authplex/authplex?style=social)](https://github.com/authplex/authplex/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/authplex/authplex)](https://github.com/authplex/authplex/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/authplex/authplex)](https://github.com/authplex/authplex/commits/main)
+[![Repo Size](https://img.shields.io/github/repo-size/authplex/authplex)](https://github.com/authplex/authplex)
+[![Docker Image Size](https://img.shields.io/badge/docker-~20MB-2496ED?logo=docker)](https://github.com/authplex/authplex)
+
+AuthPlex is a lightweight, multi-tenant IAM engine that provides OIDC/OAuth 2.0 authentication and authorization for any tech stack. No UI — pure API. ~20MB Docker image. 812 tests. 80%+ coverage.
 
 ## Quick Start
 
@@ -337,17 +349,20 @@ curl -X POST http://localhost:8080/token \
 
 ## Stats
 
-```
-Files:     ~237 Go files (source + test)
-Tests:     720 assertions across 40 packages
-Coverage:  85.0% (85% threshold enforced)
-Image:     ~20MB (alpine:3.20)
-RAM:       <300MB
-Deps:      6 (env, testify, x/crypto, pgx, go-redis, testcontainers)
-Modules:   12 completed (0-10 + SDK)
-Migrations: 19 SQL files
-```
+| Metric | Value |
+|--------|-------|
+| Go source files | ~273 |
+| Test functions | 812 across 47 packages |
+| E2E subtests | 141 (real Postgres + Redis via testcontainers) |
+| Playwright tests | 30 |
+| Line coverage | 80%+ (threshold enforced in CI) |
+| HTTP endpoints | 49 |
+| Docker image | ~20MB (alpine) |
+| Memory usage | <300MB |
+| External dependencies | 7 (env, testify, x/crypto, pgx, go-redis, go-webauthn, crewjam/saml) |
+| SQL migrations | 19 |
+| Completed modules | 13 (scaffold → GTM) |
 
 ## License
 
-Private project.
+MIT — see [LICENSE](LICENSE).
