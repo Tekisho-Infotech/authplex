@@ -36,10 +36,7 @@ func NewService(repo webhook.Repository, logger *slog.Logger) *Service {
 
 // Create registers a new webhook for a tenant.
 func (s *Service) Create(ctx context.Context, tenantID, url string, events []string) (*webhook.Webhook, error) {
-	id, err := generateID()
-	if err != nil {
-		return nil, fmt.Errorf("generate webhook id: %w", err)
-	}
+	id := generateID()
 
 	secret, err := generateSecret()
 	if err != nil {
@@ -124,8 +121,8 @@ func sign(secret string, body []byte) string {
 	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
-func generateID() (string, error) { //nolint:unparam
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }
 
 func generateSecret() (string, error) {

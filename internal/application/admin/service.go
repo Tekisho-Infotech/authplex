@@ -143,10 +143,7 @@ func (s *Service) createAdmin(ctx context.Context, email, password string, role 
 		return nil, apperrors.New(apperrors.ErrBadRequest, "password must be at least 8 characters")
 	}
 
-	id, err := generateID()
-	if err != nil {
-		return nil, apperrors.Wrap(apperrors.ErrInternal, "failed to generate admin user ID", err)
-	}
+	id := generateID()
 
 	hash, err := s.hasher.Hash(password)
 	if err != nil {
@@ -180,8 +177,8 @@ func (s *Service) createAdmin(ctx context.Context, email, password string, role 
 	}, nil
 }
 
-func generateID() (string, error) { //nolint:unparam
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }
 
 // hashPII returns a truncated SHA-256 hash of PII for safe logging.

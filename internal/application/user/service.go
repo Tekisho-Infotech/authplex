@@ -66,10 +66,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 		return RegisterResponse{}, apperrors.New(apperrors.ErrBadRequest, "password is required")
 	}
 
-	id, err := generateID()
-	if err != nil {
-		return RegisterResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate user ID", err)
-	}
+	id := generateID()
 
 	u, valErr := domainuser.NewUser(id, req.TenantID, req.Email, req.Name)
 	if valErr != nil {
@@ -134,10 +131,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResponse, *
 		return LoginResponse{}, apperrors.New(apperrors.ErrUnauthorized, "invalid credentials")
 	}
 
-	sessionID, err := generateID()
-	if err != nil {
-		return LoginResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate session", err)
-	}
+	sessionID := generateID()
 
 	session, valErr := domainuser.NewSession(sessionID, u.ID, u.TenantID, s.sessionTTL)
 	if valErr != nil {
@@ -387,10 +381,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (LoginRes
 	}
 
 	// Create session
-	sessionID, err := generateID()
-	if err != nil {
-		return LoginResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate session", err)
-	}
+	sessionID := generateID()
 
 	session, valErr := domainuser.NewSession(sessionID, u.ID, u.TenantID, s.sessionTTL)
 	if valErr != nil {
@@ -521,6 +512,6 @@ func (s *Service) ValidateCredentials(ctx context.Context, tenantID, username, p
 	return u.ID, nil
 }
 
-func generateID() (string, error) { //nolint:unparam
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }
