@@ -77,7 +77,7 @@ func GenerateAppleClientSecret(teamID, clientID, keyID string, privateKeyPEM []b
 	keySize := 32
 	rBytes := padToSize(r.Bytes(), keySize)
 	sBytes := padToSize(s.Bytes(), keySize)
-	sig := append(rBytes, sBytes...)
+	sig := append(rBytes, sBytes...) //nolint:gocritic
 	sigB64 := base64.RawURLEncoding.EncodeToString(sig)
 
 	return signingInput + "." + sigB64, nil

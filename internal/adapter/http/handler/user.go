@@ -211,7 +211,7 @@ func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{ //nolint:errcheck
 		"users":  users,
 		"count":  total,
 		"offset": offset,

@@ -40,7 +40,7 @@ func (s *Service) WithAlerter(a securitysvc.AlertObserver) {
 
 // Log records an audit event.
 func (s *Service) Log(ctx context.Context, tenantID, actorID, actorType string, action domainaudit.EventType, resourceType, resourceID string, r *http.Request, details map[string]any) {
-	id, _ := generateID()
+	id := generateID()
 
 	var ip, ua string
 	if r != nil {
@@ -103,6 +103,6 @@ func extractIP(r *http.Request) string {
 	return strings.Split(r.RemoteAddr, ":")[0]
 }
 
-func generateID() (string, error) {
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }

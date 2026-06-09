@@ -503,7 +503,7 @@ func (s *Service) Introspect(ctx context.Context, req IntrospectRequest) (Intros
 	// Decode and verify JWT signature
 	claims, err := s.verifyAndDecodeJWT(ctx, req.Token)
 	if err != nil {
-		return IntrospectResponse{Active: false}, nil
+		return IntrospectResponse{Active: false}, nil //nolint:nilerr // invalid token → inactive, not an error to the caller
 	}
 
 	now := time.Now().UTC().Unix()
@@ -568,7 +568,7 @@ func (s *Service) issueTokensWithEndpoints(ctx context.Context, subject, clientI
 	if len(endpoints) > 0 {
 		kp, keyErr := s.jwksSvc.GetActiveKeyPair(ctx, tenantID)
 		if keyErr != nil {
-			return resp, nil // fallback: return token without endpoint claims
+			return resp, nil //nolint:nilerr // key unavailable — return token without endpoint claims
 		}
 
 		now := time.Now().UTC()
@@ -855,10 +855,10 @@ func (s *Service) verifyAndDecodeJWT(ctx context.Context, jwtToken string) (toke
 	// Get the active key pair for signature verification
 	kp, kpErr := s.jwksSvc.GetActiveKeyPair(ctx, tenantID)
 	if kpErr != nil {
-		// Cannot verify signature without key — fall back to claims-only
-		// This happens for tokens issued before tenant_id was added to claims
+		// Cannot verify signature without key — fall back to claims-only.
+		// Occurs for tokens issued before tenant_id was embedded in claims.
 		s.logger.Warn("JWT signature verification skipped: no key found", "tenant_id", tenantID)
-		return claims, nil
+		return claims, nil //nolint:nilerr
 	}
 
 	// Verify signature

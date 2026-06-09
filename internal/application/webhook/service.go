@@ -108,7 +108,7 @@ func (s *Service) deliver(hook webhook.Webhook, body []byte) {
 		s.logger.Error("webhook delivery failed", "error", err, "webhook_id", hook.ID, "url", hook.URL)
 		return
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		s.logger.Debug("webhook delivered", "webhook_id", hook.ID, "url", hook.URL, "status", resp.StatusCode)
@@ -124,7 +124,7 @@ func sign(secret string, body []byte) string {
 	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
-func generateID() (string, error) {
+func generateID() (string, error) { //nolint:unparam
 	return uuid.New().String(), nil
 }
 

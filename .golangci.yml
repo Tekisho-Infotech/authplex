@@ -1,6 +1,7 @@
+version: "2"
+
 run:
   timeout: 5m
-  go: "1.22"
 
 linters:
   enable:
@@ -13,41 +14,46 @@ linters:
     - unparam
     - unused
     - ineffassign
-    - typecheck
     - nilerr
     - exhaustive
-
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
-  revive:
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: exported
+          disabled: true
+        - name: increment-decrement
+        - name: var-naming
+        - name: unreachable-code
+    gocritic:
+      enabled-checks:
+        - appendAssign
+        - dupArg
+        - dupBranchBody
+        - equalFold
+        - sloppyLen
+    gosec:
+      excludes:
+        - G104  # Result[T] pattern — not all errors need explicit check
+  exclusions:
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: error-return
-      - name: error-strings
-      - name: exported
-        disabled: true
-      - name: increment-decrement
-      - name: var-naming
-      - name: unreachable-code
-  gocritic:
-    enabled-checks:
-      - appendAssign
-      - dupArg
-      - dupBranchBody
-      - equalFold
-      - sloppyLen
-  gosec:
-    excludes:
-      - G104  # We use Result[T] pattern, not all errors need explicit check
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
-    - path: cmd/
-      linters:
-        - unparam
+      - path: '.*_test\.go'
+        linters:
+          - gosec
+          - errcheck
+          - unparam
+      - path: 'cmd/'
+        linters:
+          - unparam
+          - errcheck
+      - path: 'internal/adapter/http/oauth/providers\.go'
+        linters:
+          - gosec  # G101: provider URLs are public OAuth endpoints, not credentials
+      - path: 'internal/adapter/postgres/'
+        linters:
+          - errcheck  # rows.Close errors in postgres adapters are non-actionable

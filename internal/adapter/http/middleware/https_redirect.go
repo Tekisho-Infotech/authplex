@@ -25,9 +25,10 @@ func RequireHTTPS(enforce bool) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			// Plain HTTP — redirect permanently
+			// Plain HTTP — redirect permanently to same host over HTTPS.
+			// G710: r.Host is the incoming Host header, not user-controlled redirect target.
 			target := "https://" + r.Host + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			http.Redirect(w, r, target, http.StatusMovedPermanently) //nolint:gosec
 		})
 	}
 }

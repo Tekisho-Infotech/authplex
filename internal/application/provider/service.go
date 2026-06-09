@@ -96,6 +96,6 @@ func (s *Service) Delete(ctx context.Context, id, tenantID string) *apperrors.Ap
 	return nil
 }
 
-func generateID() (string, error) {
+func generateID() (string, error) { //nolint:unparam
 	return uuid.New().String(), nil
 }

@@ -89,10 +89,10 @@ func (h *WebhookHandler) listWebhooks(w http.ResponseWriter, r *http.Request, te
 		hooks = []webhook.Webhook{}
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{ //nolint:errcheck
 		"webhooks": hooks,
 		"count":    len(hooks),
-	}) //nolint:errcheck
+	})
 }
 
 func (h *WebhookHandler) deleteWebhook(w http.ResponseWriter, r *http.Request, tenantID, webhookID string) {

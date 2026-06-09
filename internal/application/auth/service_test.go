@@ -1133,14 +1133,13 @@ func buildDPoPProof(t *testing.T, ath string) string {
 }
 
 // buildSignedDPoPProof creates a fully signed DPoP proof JWT using a fresh P-256 key.
-// Returns the proof string and the JWK thumbprint for use in cnf.jkt assertions.
-func buildSignedDPoPProof(t *testing.T, ath, htm, htu string) (proof string, ecKey *ecdsa.PrivateKey) {
+func buildSignedDPoPProof(t *testing.T, ath, htm, htu string) string {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	xBytes := key.PublicKey.X.Bytes()
-	yBytes := key.PublicKey.Y.Bytes()
+	xBytes := key.X.Bytes()
+	yBytes := key.Y.Bytes()
 	jwkObj := map[string]any{
 		"kty": "EC",
 		"crv": "P-256",
@@ -1169,7 +1168,7 @@ func buildSignedDPoPProof(t *testing.T, ath, htm, htu string) (proof string, ecK
 
 	sigInput := headerB64 + "." + payloadB64
 	h := sha256.Sum256([]byte(sigInput))
-	byteLen := (key.PublicKey.Curve.Params().BitSize + 7) / 8
+	byteLen := (key.Curve.Params().BitSize + 7) / 8
 	r, s, _ := ecdsa.Sign(rand.Reader, key, h[:])
 	sig := make([]byte, byteLen*2)
 	rBytes := r.Bytes()
@@ -1178,7 +1177,7 @@ func buildSignedDPoPProof(t *testing.T, ath, htm, htu string) (proof string, ecK
 	copy(sig[2*byteLen-len(sBytes):], sBytes)
 	sigB64 := base64.RawURLEncoding.EncodeToString(sig)
 
-	return sigInput + "." + sigB64, key
+	return sigInput + "." + sigB64
 }
 
 func accessTokenHash(tok string) string {
@@ -1195,8 +1194,8 @@ func dpopProofWithPayload(t *testing.T, payloadFields map[string]any) string {
 	require.NoError(t, err)
 	jwkObj := map[string]any{
 		"kty": "EC", "crv": "P-256",
-		"x": base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
-		"y": base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes()),
+		"x": base64.RawURLEncoding.EncodeToString(key.X.Bytes()),
+		"y": base64.RawURLEncoding.EncodeToString(key.Y.Bytes()),
 	}
 	jwkJSON, _ := json.Marshal(jwkObj)
 	headerObj := map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": json.RawMessage(jwkJSON)}
@@ -1215,7 +1214,7 @@ func dpopProofWithPayload(t *testing.T, payloadFields map[string]any) string {
 func TestValidateDPoP_Valid(t *testing.T) {
 	accessToken := "some.access.token"
 	ath := accessTokenHash(accessToken)
-	proof, _ := buildSignedDPoPProof(t, ath, "POST", "https://as.example.com/introspect")
+	proof := buildSignedDPoPProof(t, ath, "POST", "https://as.example.com/introspect")
 
 	var nonces sync.Map
 	err := validateDPoP(proof, accessToken, "POST", "https://as.example.com/introspect", &nonces)
@@ -1255,8 +1254,8 @@ func TestValidateDPoP_InvalidHeaderBase64(t *testing.T) {
 func TestValidateDPoP_WrongTyp(t *testing.T) {
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	jwkObj := map[string]any{"kty": "EC", "crv": "P-256",
-		"x": base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
-		"y": base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes())}
+		"x": base64.RawURLEncoding.EncodeToString(key.X.Bytes()),
+		"y": base64.RawURLEncoding.EncodeToString(key.Y.Bytes())}
 	jwkJSON, _ := json.Marshal(jwkObj)
 	headerObj := map[string]any{"typ": "JWT", "alg": "ES256", "jwk": json.RawMessage(jwkJSON)}
 	headerJSON, _ := json.Marshal(headerObj)
@@ -1281,7 +1280,7 @@ func TestValidateDPoP_StaleIAT(t *testing.T) {
 func TestValidateDPoP_JTIReplay(t *testing.T) {
 	accessToken := "some.access.token"
 	ath := accessTokenHash(accessToken)
-	proof, _ := buildSignedDPoPProof(t, ath, "", "")
+	proof := buildSignedDPoPProof(t, ath, "", "")
 
 	var nonces sync.Map
 	// First call succeeds
@@ -1369,7 +1368,7 @@ func TestDPoPParseJWK_BadECX(t *testing.T) {
 
 func TestDPoPParseJWK_BadECY(t *testing.T) {
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	x := base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes())
+	x := base64.RawURLEncoding.EncodeToString(key.X.Bytes())
 	jwkJSON, _ := json.Marshal(map[string]any{"kty": "EC", "crv": "P-256", "x": x, "y": "!!!bad!!!"})
 	_, err := dpopParseJWK(jwkJSON)
 	require.Error(t, err)
@@ -1430,8 +1429,8 @@ func TestValidateDPoP_MissingJTI(t *testing.T) {
 	// Build proof without jti (override the base jti with empty string)
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	jwkObj := map[string]any{"kty": "EC", "crv": "P-256",
-		"x": base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
-		"y": base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes())}
+		"x": base64.RawURLEncoding.EncodeToString(key.X.Bytes()),
+		"y": base64.RawURLEncoding.EncodeToString(key.Y.Bytes())}
 	jwkJSON, _ := json.Marshal(jwkObj)
 	headerObj := map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": json.RawMessage(jwkJSON)}
 	headerJSON, _ := json.Marshal(headerObj)

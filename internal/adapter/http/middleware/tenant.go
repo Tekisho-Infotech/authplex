@@ -56,12 +56,13 @@ func (tr *TenantResolver) Middleware(next http.Handler) http.Handler {
 		case config.TenantModeHeader:
 			identifier = r.Header.Get("X-Tenant-ID")
 			if identifier == "" {
-				if tr.defaultTenantID != "" {
+				switch {
+				case tr.defaultTenantID != "":
 					identifier = tr.defaultTenantID
-				} else if tr.optional {
+				case tr.optional:
 					next.ServeHTTP(w, r) // let the handler resolve the tenant
 					return
-				} else {
+				default:
 					httputil.WriteError(w, httputil.MethodNotAllowed("X-Tenant-ID header is required")) //nolint:errcheck
 					return
 				}
@@ -69,12 +70,13 @@ func (tr *TenantResolver) Middleware(next http.Handler) http.Handler {
 		case config.TenantModeDomain:
 			identifier = r.Host
 			if identifier == "" {
-				if tr.defaultTenantID != "" {
+				switch {
+				case tr.defaultTenantID != "":
 					identifier = tr.defaultTenantID
-				} else if tr.optional {
+				case tr.optional:
 					next.ServeHTTP(w, r)
 					return
-				} else {
+				default:
 					httputil.WriteError(w, httputil.MethodNotAllowed("Host header is required")) //nolint:errcheck
 					return
 				}

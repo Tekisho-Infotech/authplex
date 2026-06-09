@@ -221,7 +221,7 @@ func (a *AuthPlex) RequireJWT(next http.Handler) http.Handler {
 		// Extract Bearer token
 		authHeader := r.Header.Get("Authorization")
 		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			http.Error(w, `{"error":"unauthorized"}`, 401)
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		// Token is self-verified via JWKS — delegates to the framework

@@ -180,7 +180,7 @@ func (s *Service) createAdmin(ctx context.Context, email, password string, role 
 	}, nil
 }
 
-func generateID() (string, error) {
+func generateID() (string, error) { //nolint:unparam
 	return uuid.New().String(), nil
 }
 

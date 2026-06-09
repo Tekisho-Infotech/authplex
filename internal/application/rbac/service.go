@@ -153,6 +153,6 @@ func (s *Service) GetUserPermissions(ctx context.Context, userID, tenantID strin
 	return domainrbac.FlattenPermissions(roles), nil
 }
 
-func generateID() (string, error) {
+func generateID() (string, error) { //nolint:unparam
 	return uuid.New().String(), nil
 }

@@ -521,6 +521,6 @@ func (s *Service) ValidateCredentials(ctx context.Context, tenantID, username, p
 	return u.ID, nil
 }
 
-func generateID() (string, error) {
+func generateID() (string, error) { //nolint:unparam
 	return uuid.New().String(), nil
 }

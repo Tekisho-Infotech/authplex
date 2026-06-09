@@ -113,10 +113,10 @@ func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Reques
 		// Validate scopes
 		scope := httputil.QueryParam(r, "scope", "openid")
 		if invalid := c.ValidateScopes(scope); len(invalid) > 0 {
-			httputil.WriteRaw(w, http.StatusBadRequest, map[string]string{
+			httputil.WriteRaw(w, http.StatusBadRequest, map[string]string{ //nolint:errcheck
 				"error":             "invalid_scope",
 				"error_description": "scope not allowed: " + strings.Join(invalid, ", "),
-			}) //nolint:errcheck
+			})
 			return
 		}
 	}

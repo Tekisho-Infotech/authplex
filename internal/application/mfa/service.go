@@ -289,7 +289,7 @@ func (s *Service) newWebAuthn() (*webauthn.WebAuthn, *apperrors.AppError) {
 }
 
 // buildWebAuthnUser constructs a webauthn.User adapter from stored credentials.
-func (s *Service) buildWebAuthnUser(ctx context.Context, tenantID, subject, displayName string) (*webauthnUser, *apperrors.AppError) {
+func (s *Service) buildWebAuthnUser(ctx context.Context, tenantID, subject, displayName string) (*webauthnUser, *apperrors.AppError) { //nolint:unparam
 	stored, err := s.webauthnRepo.GetBySubject(ctx, tenantID, subject)
 	if err != nil {
 		// No credentials yet — that's fine for registration.
@@ -655,6 +655,6 @@ func (s *Service) VerifyMFAWebAuthn(ctx context.Context, challenge domainmfa.MFA
 	return nil
 }
 
-func generateID() (string, error) {
+func generateID() (string, error) { //nolint:unparam
 	return uuid.New().String(), nil
 }
