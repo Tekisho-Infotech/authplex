@@ -68,6 +68,41 @@ func (s *JWTSigner) Sign(claims token.Claims, kid string, privateKeyPEM []byte, 
 	return signingInput + "." + signatureB64, nil
 }
 
+// SignRaw creates a signed JWT from any JSON-marshalable payload.
+func (s *JWTSigner) SignRaw(payload any, kid string, privateKeyPEM []byte, algorithm string) (string, error) {
+	header := jwtHeader{
+		ALG: algorithm,
+		TYP: "JWT",
+		KID: kid,
+	}
+
+	headerJSON, err := json.Marshal(header)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal JWT header: %w", err)
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal JWT payload: %w", err)
+	}
+
+	headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	signingInput := headerB64 + "." + payloadB64
+
+	privKey, err := parsePrivateKey(privateKeyPEM)
+	if err != nil {
+		return "", err
+	}
+
+	signature, err := signPayload(signingInput, privKey, algorithm)
+	if err != nil {
+		return "", err
+	}
+
+	return signingInput + "." + base64.RawURLEncoding.EncodeToString(signature), nil
+}
+
 func parsePrivateKey(pemBytes []byte) (crypto.PrivateKey, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {

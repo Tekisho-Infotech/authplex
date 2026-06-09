@@ -76,7 +76,7 @@ func TestSetupPostgresRepos_NilDB(t *testing.T) {
 func TestSetupServerWithRepos(t *testing.T) {
 	cfg := testConfig()
 	r := setupInMemoryRepos()
-	h := setupServerWithRepos(cfg, slog.Default(), r)
+	h, _ := setupServerWithRepos(cfg, slog.Default(), r)
 	assert.NotNil(t, h)
 
 	// Health should work

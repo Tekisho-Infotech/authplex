@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	securitysvc "github.com/authplex/internal/application/security"
 	webhooksvc "github.com/authplex/internal/application/webhook"
 	domainaudit "github.com/authplex/internal/domain/audit"
 	apperrors "github.com/authplex/pkg/sdk/errors"
@@ -19,6 +20,7 @@ type Service struct {
 	repo       domainaudit.Repository
 	logger     *slog.Logger
 	webhookSvc *webhooksvc.Service
+	alerter    securitysvc.AlertObserver
 }
 
 // NewService creates a new audit service.
@@ -29,6 +31,11 @@ func NewService(repo domainaudit.Repository, logger *slog.Logger) *Service {
 // WithWebhooks sets the webhook service for event delivery.
 func (s *Service) WithWebhooks(svc *webhooksvc.Service) {
 	s.webhookSvc = svc
+}
+
+// WithAlerter registers the security alerter to observe every audit event.
+func (s *Service) WithAlerter(a securitysvc.AlertObserver) {
+	s.alerter = a
 }
 
 // Log records an audit event.
@@ -59,8 +66,15 @@ func (s *Service) Log(ctx context.Context, tenantID, actorID, actorType string, 
 		s.logger.Error("failed to store audit event", "error", err, "action", action)
 	}
 
+	// Feed every event into the security alerter for threshold analysis.
+	if s.alerter != nil {
+		s.alerter.Observe(ctx, event)
+	}
+
 	if s.webhookSvc != nil {
-		go s.webhookSvc.Deliver(ctx, tenantID, string(action), map[string]any{
+		// Detach from the request context so the delivery goroutine isn't cancelled
+		// when the HTTP handler returns.
+		go s.webhookSvc.Deliver(context.WithoutCancel(ctx), tenantID, string(action), map[string]any{
 			"event":         action,
 			"actor_id":      actorID,
 			"resource_type": resourceType,

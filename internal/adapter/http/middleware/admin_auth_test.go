@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -117,77 +115,20 @@ func TestAdminAuth_WithJWTVerifier(t *testing.T) {
 	assert.NotNil(t, result, "WithJWTVerifier should return non-nil *AdminAuth")
 }
 
-func TestDecodeAdminJWT_InvalidFormat(t *testing.T) {
-	_, err := decodeAdminJWT("not-a-jwt")
-	assert.NotNil(t, err)
-}
+func TestAdminAuth_NoVerifier_JWT_Rejected(t *testing.T) {
+	// Without a verifier, JWT tokens must be rejected (not accepted via unsigned fallback)
+	auth := NewAdminAuth("real-key") // verifyJWT is nil
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("next should not be called")
+	})
 
-func TestDecodeAdminJWT_InvalidBase64(t *testing.T) {
-	_, err := decodeAdminJWT("header.!!!invalid!!!.sig")
-	assert.NotNil(t, err)
-}
+	req := httptest.NewRequest(http.MethodGet, "/tenants", nil)
+	req.Header.Set("Authorization", "Bearer header.payload.sig")
+	w := httptest.NewRecorder()
 
-func TestDecodeAdminJWT_InvalidJSON(t *testing.T) {
-	// Valid base64 but not JSON
-	payload := base64.RawURLEncoding.EncodeToString([]byte("not json"))
-	_, err := decodeAdminJWT("header." + payload + ".sig")
-	assert.NotNil(t, err)
-}
+	auth.Middleware(next).ServeHTTP(w, req)
 
-func TestDecodeAdminJWT_NotAdminToken(t *testing.T) {
-	claims := map[string]any{
-		"sub": "user-1",
-		"aud": []string{"other-audience"},
-		"exp": 9999999999,
-		"iat": 1000000000,
-	}
-	payload, _ := json.Marshal(claims)
-	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	_, err := decodeAdminJWT("header." + encoded + ".sig")
-	assert.NotNil(t, err)
-}
-
-func TestDecodeAdminJWT_Expired(t *testing.T) {
-	claims := map[string]any{
-		"sub":   "admin-1",
-		"aud":   []string{"authplex-admin"},
-		"exp":   int64(1000), // expired
-		"iat":   int64(999),
-		"roles": []string{"super_admin"},
-	}
-	payload, _ := json.Marshal(claims)
-	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	_, err := decodeAdminJWT("header." + encoded + ".sig")
-	assert.NotNil(t, err)
-}
-
-func TestDecodeAdminJWT_MissingSubject(t *testing.T) {
-	claims := map[string]any{
-		"aud":   []string{"authplex-admin"},
-		"exp":   9999999999,
-		"roles": []string{"super_admin"},
-	}
-	payload, _ := json.Marshal(claims)
-	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	_, err := decodeAdminJWT("header." + encoded + ".sig")
-	assert.NotNil(t, err)
-}
-
-func TestDecodeAdminJWT_ValidSuperAdmin(t *testing.T) {
-	claims := map[string]any{
-		"sub":   "admin-1",
-		"aud":   []string{"authplex-admin"},
-		"exp":   int64(9999999999),
-		"iat":   int64(1000000000),
-		"roles": []string{"super_admin"},
-		"email": "admin@test.com",
-	}
-	payload, _ := json.Marshal(claims)
-	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	ac, err := decodeAdminJWT("header." + encoded + ".sig")
-	assert.Nil(t, err)
-	assert.NotNil(t, ac)
-	assert.Equal(t, "admin-1", ac.AdminID)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestEnforceRole_SuperAdmin(t *testing.T) {
@@ -225,9 +166,47 @@ func TestEnforceRole_Auditor_NonAudit(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestEnforceRole_TenantAdmin(t *testing.T) {
-	ac := &AdminContext{Role: admin.RoleTenantAdmin, AdminID: "a1"}
-	req := httptest.NewRequest(http.MethodGet, "/tenants/t1", nil)
+func TestEnforceRole_TenantAdmin_AuthorizedTenant(t *testing.T) {
+	ac := &AdminContext{Role: admin.RoleTenantAdmin, AdminID: "a1", TenantIDs: []string{"t1", "t2"}}
+	req := httptest.NewRequest(http.MethodGet, "/tenants/t1/users", nil)
 	err := enforceRole(ac, req)
 	assert.Nil(t, err)
+}
+
+func TestEnforceRole_TenantAdmin_UnauthorizedTenant(t *testing.T) {
+	ac := &AdminContext{Role: admin.RoleTenantAdmin, AdminID: "a1", TenantIDs: []string{"t1"}}
+	req := httptest.NewRequest(http.MethodGet, "/tenants/t2/users", nil)
+	err := enforceRole(ac, req)
+	assert.NotNil(t, err)
+}
+
+func TestEnforceRole_TenantAdmin_EmptyTenantIDs(t *testing.T) {
+	ac := &AdminContext{Role: admin.RoleTenantAdmin, AdminID: "a1", TenantIDs: nil}
+	req := httptest.NewRequest(http.MethodGet, "/tenants/t1", nil)
+	err := enforceRole(ac, req)
+	assert.NotNil(t, err)
+}
+
+func TestEnforceRole_TenantAdmin_NoTenantInPath(t *testing.T) {
+	ac := &AdminContext{Role: admin.RoleTenantAdmin, AdminID: "a1", TenantIDs: []string{"t1"}}
+	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	err := enforceRole(ac, req)
+	assert.NotNil(t, err)
+}
+
+func TestExtractTenantFromPath(t *testing.T) {
+	cases := []struct {
+		path     string
+		expected string
+	}{
+		{"/tenants/abc123", "abc123"},
+		{"/tenants/abc123/users", "abc123"},
+		{"/tenants/abc123/clients/c1", "abc123"},
+		{"/tenants", ""},
+		{"/admin/users", ""},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.expected, extractTenantFromPath(tc.path), "path: %s", tc.path)
+	}
 }

@@ -13,10 +13,11 @@ import (
 // TenantResolver is middleware that extracts tenant from the request
 // and injects it into the context.
 type TenantResolver struct {
-	tenantSvc *tenantsvc.Service
-	mode      config.TenantMode
-	optional  bool // if true, missing tenant header is allowed; handler must resolve tenant itself
-	logger    *slog.Logger
+	tenantSvc       *tenantsvc.Service
+	mode            config.TenantMode
+	optional        bool   // if true, missing tenant header is allowed; handler must resolve tenant itself
+	defaultTenantID string // fallback when no tenant identifier is present in the request
+	logger          *slog.Logger
 }
 
 // NewTenantResolver creates a new TenantResolver middleware.
@@ -26,6 +27,15 @@ func NewTenantResolver(svc *tenantsvc.Service, mode config.TenantMode, logger *s
 		mode:      mode,
 		logger:    logger,
 	}
+}
+
+// WithDefaultTenant returns a copy of the resolver that falls back to the given
+// tenantID when no tenant identifier is present in the request. Enables
+// single-tenant deployments without requiring explicit tenant headers.
+func (tr *TenantResolver) WithDefaultTenant(tenantID string) *TenantResolver {
+	copy := *tr
+	copy.defaultTenantID = tenantID
+	return &copy
 }
 
 // Optional returns a copy of the resolver that does not reject requests with
@@ -46,22 +56,28 @@ func (tr *TenantResolver) Middleware(next http.Handler) http.Handler {
 		case config.TenantModeHeader:
 			identifier = r.Header.Get("X-Tenant-ID")
 			if identifier == "" {
-				if tr.optional {
+				if tr.defaultTenantID != "" {
+					identifier = tr.defaultTenantID
+				} else if tr.optional {
 					next.ServeHTTP(w, r) // let the handler resolve the tenant
 					return
+				} else {
+					httputil.WriteError(w, httputil.MethodNotAllowed("X-Tenant-ID header is required")) //nolint:errcheck
+					return
 				}
-				httputil.WriteError(w, httputil.MethodNotAllowed("X-Tenant-ID header is required")) //nolint:errcheck
-				return
 			}
 		case config.TenantModeDomain:
 			identifier = r.Host
 			if identifier == "" {
-				if tr.optional {
+				if tr.defaultTenantID != "" {
+					identifier = tr.defaultTenantID
+				} else if tr.optional {
 					next.ServeHTTP(w, r)
 					return
+				} else {
+					httputil.WriteError(w, httputil.MethodNotAllowed("Host header is required")) //nolint:errcheck
+					return
 				}
-				httputil.WriteError(w, httputil.MethodNotAllowed("Host header is required")) //nolint:errcheck
-				return
 			}
 		}
 

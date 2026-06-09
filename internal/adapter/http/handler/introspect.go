@@ -35,6 +35,9 @@ func (h *IntrospectHandler) HandleIntrospect(w http.ResponseWriter, r *http.Requ
 		ClientID:      r.FormValue("client_id"),
 		ClientSecret:  r.FormValue("client_secret"),
 		TenantID:      resolveTenantID(r),
+		DPoPProof:     r.Header.Get("DPoP"),
+		HTTPMethod:    r.Method,
+		HTTPURI:       r.URL.String(),
 	}
 
 	resp, appErr := h.svc.Introspect(r.Context(), req)

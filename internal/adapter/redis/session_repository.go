@@ -45,6 +45,10 @@ func (r *SessionRepository) GetByID(ctx context.Context, id string) (user.Sessio
 	if err := json.Unmarshal(data, &s); err != nil {
 		return user.Session{}, apperrors.Wrap(apperrors.ErrInternal, "failed to unmarshal session", err)
 	}
+	// Guard against a stale TTL edge case where Redis hasn't evicted the key yet.
+	if s.ExpiresAt.Before(time.Now().UTC()) {
+		return user.Session{}, apperrors.New(apperrors.ErrNotFound, "session not found")
+	}
 	return s, nil
 }
 
@@ -52,9 +56,7 @@ func (r *SessionRepository) Delete(ctx context.Context, id string) error {
 	return r.rdb.Del(ctx, sessionPrefix+id).Err()
 }
 
-func (r *SessionRepository) DeleteByUserID(ctx context.Context, userID string) error {
-	// Scan for all sessions by user — uses pattern matching
-	// In production, consider a secondary index (user:sessions:userID set)
+func (r *SessionRepository) DeleteByUserID(ctx context.Context, userID, tenantID string) error {
 	iter := r.rdb.Scan(ctx, 0, sessionPrefix+"*", 100).Iterator()
 	for iter.Next(ctx) {
 		data, err := r.rdb.Get(ctx, iter.Val()).Bytes()
@@ -62,9 +64,14 @@ func (r *SessionRepository) DeleteByUserID(ctx context.Context, userID string) e
 			continue
 		}
 		var s user.Session
-		if json.Unmarshal(data, &s) == nil && s.UserID == userID {
+		if json.Unmarshal(data, &s) == nil && s.UserID == userID && s.TenantID == tenantID {
 			r.rdb.Del(ctx, iter.Val()) //nolint:errcheck
 		}
 	}
 	return nil
+}
+
+// DeleteExpired is a no-op for Redis: TTL-based expiry is handled natively by the store.
+func (r *SessionRepository) DeleteExpired(_ context.Context) (int64, error) {
+	return 0, nil
 }

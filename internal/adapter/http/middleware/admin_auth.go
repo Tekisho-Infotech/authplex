@@ -3,11 +3,8 @@ package middleware
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/authplex/internal/domain/admin"
 	"github.com/authplex/pkg/sdk/httputil"
@@ -88,16 +85,12 @@ func (a *AdminAuth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Try to decode as admin JWT
-		var ac *AdminContext
-		var err error
-		if a.verifyJWT != nil {
-			// Use cryptographic signature verification
-			ac, err = a.verifyJWT(tokenStr)
-		} else {
-			// Fallback: decode without signature verification (tests only)
-			ac, err = decodeAdminJWT(tokenStr)
+		// Try to verify as admin JWT — signature verification is required
+		if a.verifyJWT == nil {
+			httputil.WriteError(w, apperrors.New(apperrors.ErrUnauthorized, "invalid API key or admin token")) //nolint:errcheck
+			return
 		}
+		ac, err := a.verifyJWT(tokenStr)
 		if err != nil {
 			httputil.WriteError(w, apperrors.New(apperrors.ErrUnauthorized, "invalid API key or admin token")) //nolint:errcheck
 			return
@@ -114,97 +107,19 @@ func (a *AdminAuth) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// decodeAdminJWT decodes a JWT token and extracts the admin context.
-// NOTE: Signature verification relies on the token being issued by this server
-// with the server's signing keys. For a production system, full signature
-// verification with JWKS should be added. This implementation validates
-// the claims structure and expiry.
-func decodeAdminJWT(tokenStr string) (*AdminContext, error) {
-	parts := strings.Split(tokenStr, ".")
-	if len(parts) != 3 {
-		return nil, apperrors.New(apperrors.ErrUnauthorized, "malformed JWT")
-	}
-
-	// Decode payload (second part)
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, apperrors.New(apperrors.ErrUnauthorized, "invalid JWT payload encoding")
-	}
-
-	var claims struct {
-		Subject   string   `json:"sub"`
-		Audience  []string `json:"aud"`
-		ExpiresAt int64    `json:"exp"`
-		IssuedAt  int64    `json:"iat"`
-		Roles     []string `json:"roles"`
-		Email     string   `json:"email"`
-	}
-
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, apperrors.New(apperrors.ErrUnauthorized, "invalid JWT claims")
-	}
-
-	// Verify audience contains "authplex-admin"
-	isAdminToken := false
-	for _, aud := range claims.Audience {
-		if aud == "authplex-admin" {
-			isAdminToken = true
-			break
-		}
-	}
-	if !isAdminToken {
-		return nil, apperrors.New(apperrors.ErrUnauthorized, "token is not an admin token")
-	}
-
-	// Check expiry
-	if claims.ExpiresAt > 0 {
-		now := time.Now().Unix()
-		if now > claims.ExpiresAt {
-			return nil, apperrors.New(apperrors.ErrUnauthorized, "admin token expired")
-		}
-	}
-
-	if claims.Subject == "" {
-		return nil, apperrors.New(apperrors.ErrUnauthorized, "admin token missing subject")
-	}
-
-	// Extract role from roles claim
-	var role admin.AdminRole
-	if len(claims.Roles) > 0 {
-		role = admin.AdminRole(claims.Roles[0])
-	}
-	if !role.IsValid() {
-		return nil, apperrors.New(apperrors.ErrUnauthorized, "admin token has invalid role")
-	}
-
-	// Parse tenant_ids from the payload directly
-	var rawClaims map[string]json.RawMessage
-	if err := json.Unmarshal(payload, &rawClaims); err == nil {
-		// tenant_ids may be embedded if present
-	}
-
-	return &AdminContext{
-		Role:    role,
-		AdminID: claims.Subject,
-	}, nil
-}
-
 // enforceRole checks if the admin's role permits the request.
 func enforceRole(ac *AdminContext, r *http.Request) *apperrors.AppError {
 	switch ac.Role {
 	case admin.RoleSuperAdmin:
-		// super_admin can do everything
 		return nil
 
 	case admin.RoleReadonly:
-		// readonly can only do GET requests
 		if r.Method != http.MethodGet {
 			return apperrors.New(apperrors.ErrForbidden, "readonly admins can only perform GET requests")
 		}
 		return nil
 
 	case admin.RoleAuditor:
-		// auditor can only GET on /audit endpoints
 		if r.Method != http.MethodGet {
 			return apperrors.New(apperrors.ErrForbidden, "auditor admins can only perform GET requests")
 		}
@@ -214,13 +129,38 @@ func enforceRole(ac *AdminContext, r *http.Request) *apperrors.AppError {
 		return nil
 
 	case admin.RoleTenantAdmin:
-		// tenant_admin can access their scoped tenants
-		// Tenant scoping is validated at a higher level
-		return nil
+		// Tokens issued before tenant scoping was introduced have a nil TenantIDs slice.
+		// Return 401 rather than 403 so clients know to re-authenticate and get a new token.
+		if ac.TenantIDs == nil {
+			return apperrors.New(apperrors.ErrUnauthorized, "token predates tenant scoping — please re-authenticate to obtain a scoped token")
+		}
+		tenantID := extractTenantFromPath(r.URL.Path)
+		if tenantID == "" {
+			return apperrors.New(apperrors.ErrForbidden, "tenant_admin requires a specific tenant scope")
+		}
+		for _, id := range ac.TenantIDs {
+			if id == tenantID {
+				return nil
+			}
+		}
+		return apperrors.New(apperrors.ErrForbidden, "tenant_admin is not authorized for this tenant")
 
 	default:
 		return apperrors.New(apperrors.ErrForbidden, "unknown admin role")
 	}
+}
+
+// extractTenantFromPath returns the tenant ID segment from paths like /tenants/{id}/...
+func extractTenantFromPath(path string) string {
+	const prefix = "/tenants/"
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+	rest := path[len(prefix):]
+	if idx := strings.Index(rest, "/"); idx != -1 {
+		return rest[:idx]
+	}
+	return rest
 }
 
 // extractAPIKey gets the API key from Authorization: Bearer or X-API-Key header.

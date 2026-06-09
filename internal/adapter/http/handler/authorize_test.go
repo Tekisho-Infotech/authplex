@@ -72,6 +72,10 @@ func (m *mockAuthSigner) Sign(_ token.Claims, _ string, _ []byte, _ string) (str
 	return "mock-jwt", nil
 }
 
+func (m *mockAuthSigner) SignRaw(_ any, _ string, _ []byte, _ string) (string, error) {
+	return "mock-raw-jwt", nil
+}
+
 func newAuthService(codeRepo token.CodeRepository) *auth.Service {
 	jwksSvc := jwks.NewService(&mockAuthJWKRepo{}, &mockAuthGen{}, &mockAuthConv{}, slog.Default())
 	return auth.NewService(codeRepo, jwksSvc, &mockAuthSigner{}, slog.Default())

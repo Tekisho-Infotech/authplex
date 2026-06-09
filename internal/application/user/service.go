@@ -172,15 +172,61 @@ func (s *Service) Logout(ctx context.Context, req LogoutRequest) *apperrors.AppE
 	return nil
 }
 
+// PurgeUser hard-deletes a user and all associated data (GDPR Art. 17 — right to erasure).
+// Sessions are explicitly revoked before deletion; tokens and external identities cascade via FK.
+func (s *Service) PurgeUser(ctx context.Context, userID, tenantID string) *apperrors.AppError {
+	if userID == "" {
+		return apperrors.New(apperrors.ErrBadRequest, "user_id is required")
+	}
+	if tenantID == "" {
+		return apperrors.New(apperrors.ErrBadRequest, "tenant_id is required")
+	}
+	if err := s.sessionRepo.DeleteByUserID(ctx, userID, tenantID); err != nil {
+		return apperrors.Wrap(apperrors.ErrInternal, "failed to revoke user sessions before purge", err)
+	}
+
+	if err := s.userRepo.HardDelete(ctx, userID, tenantID); err != nil {
+		return apperrors.Wrap(apperrors.ErrInternal, "failed to purge user", err)
+	}
+	s.logger.Info("user purged (GDPR erasure)", "user_id", userID, "tenant_id", tenantID)
+	if s.auditSvc != nil {
+		s.auditSvc.Log(ctx, tenantID, userID, "user", domainaudit.EventUserPurged, "user", userID, nil, nil)
+	}
+	return nil
+}
+
+// ExportUserData returns all personal data held for a user (GDPR Art. 15/20 — right to access/portability).
+func (s *Service) ExportUserData(ctx context.Context, userID, tenantID string) (UserExportResponse, *apperrors.AppError) {
+	if userID == "" {
+		return UserExportResponse{}, apperrors.New(apperrors.ErrBadRequest, "user_id is required")
+	}
+	if tenantID == "" {
+		return UserExportResponse{}, apperrors.New(apperrors.ErrBadRequest, "tenant_id is required")
+	}
+	u, err := s.userRepo.GetByID(ctx, userID, tenantID)
+	if err != nil {
+		return UserExportResponse{}, apperrors.Wrap(apperrors.ErrNotFound, "user not found", err)
+	}
+	return UserExportResponse{
+		ID:               u.ID,
+		TenantID:         u.TenantID,
+		Email:            u.Email,
+		Name:             u.Name,
+		Phone:            u.Phone,
+		EmailVerified:    u.EmailVerified,
+		PhoneVerified:    u.PhoneVerified,
+		ConsentGranted:   u.ConsentGranted,
+		ConsentTimestamp: u.ConsentTimestamp,
+		CreatedAt:        u.CreatedAt,
+		UpdatedAt:        u.UpdatedAt,
+	}, nil
+}
+
 // ResolveSession validates a session token and returns the session.
 func (s *Service) ResolveSession(ctx context.Context, sessionToken string) (domainuser.Session, *apperrors.AppError) {
 	session, err := s.sessionRepo.GetByID(ctx, sessionToken)
 	if err != nil {
 		return domainuser.Session{}, apperrors.New(apperrors.ErrUnauthorized, "invalid session")
-	}
-	if session.IsExpired() {
-		s.sessionRepo.Delete(ctx, sessionToken) //nolint:errcheck
-		return domainuser.Session{}, apperrors.New(apperrors.ErrUnauthorized, "session expired")
 	}
 	return session, nil
 }

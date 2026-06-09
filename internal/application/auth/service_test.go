@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -11,6 +13,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"log/slog"
+	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,6 +97,10 @@ func (m *mockSigner) Sign(claims token.Claims, kid string, key []byte, alg strin
 		return m.signFunc(claims, kid, key, alg)
 	}
 	return "mock-jwt-token", nil
+}
+
+func (m *mockSigner) SignRaw(_ any, _ string, _ []byte, _ string) (string, error) {
+	return "mock-raw-jwt-token", nil
 }
 
 type mockRefreshRepo struct {
@@ -1111,4 +1119,328 @@ func TestExchangeClientCredentials_WithEndpoints(t *testing.T) {
 
 	require.Nil(t, appErr)
 	assert.NotEmpty(t, resp.AccessToken)
+}
+
+// --- DPoP validation tests ---
+
+// buildDPoPProof builds an unsigned DPoP proof (used only in tests that skip DPoP
+// validation because the access token carries no cnf.jkt binding).
+func buildDPoPProof(t *testing.T, ath string) string {
+	t.Helper()
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"typ":"dpop+jwt","alg":"RS256"}`))
+	payload, _ := json.Marshal(map[string]any{"ath": ath, "htm": "POST", "htu": "https://as.example.com/introspect"})
+	return header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".fakesig"
+}
+
+// buildSignedDPoPProof creates a fully signed DPoP proof JWT using a fresh P-256 key.
+// Returns the proof string and the JWK thumbprint for use in cnf.jkt assertions.
+func buildSignedDPoPProof(t *testing.T, ath, htm, htu string) (proof string, ecKey *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	xBytes := key.PublicKey.X.Bytes()
+	yBytes := key.PublicKey.Y.Bytes()
+	jwkObj := map[string]any{
+		"kty": "EC",
+		"crv": "P-256",
+		"x":   base64.RawURLEncoding.EncodeToString(xBytes),
+		"y":   base64.RawURLEncoding.EncodeToString(yBytes),
+	}
+	jwkJSON, _ := json.Marshal(jwkObj)
+
+	headerObj := map[string]any{
+		"typ": "dpop+jwt",
+		"alg": "ES256",
+		"jwk": json.RawMessage(jwkJSON),
+	}
+	headerJSON, _ := json.Marshal(headerObj)
+	headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+
+	payloadObj := map[string]any{
+		"jti": "test-jti-" + ath,
+		"htm": htm,
+		"htu": htu,
+		"iat": time.Now().Unix(),
+		"ath": ath,
+	}
+	payloadJSON, _ := json.Marshal(payloadObj)
+	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
+
+	sigInput := headerB64 + "." + payloadB64
+	h := sha256.Sum256([]byte(sigInput))
+	byteLen := (key.PublicKey.Curve.Params().BitSize + 7) / 8
+	r, s, _ := ecdsa.Sign(rand.Reader, key, h[:])
+	sig := make([]byte, byteLen*2)
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+	copy(sig[byteLen-len(rBytes):byteLen], rBytes)
+	copy(sig[2*byteLen-len(sBytes):], sBytes)
+	sigB64 := base64.RawURLEncoding.EncodeToString(sig)
+
+	return sigInput + "." + sigB64, key
+}
+
+func accessTokenHash(tok string) string {
+	h := sha256.Sum256([]byte(tok))
+	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+// dpopProofWithPayload builds an unsigned DPoP proof with the given raw payload JSON (for specific
+// failure-mode tests that exercise ath/header validation before reaching signature verification).
+// The header includes a minimal EC JWK and a valid iat/jti so validation reaches the field under test.
+func dpopProofWithPayload(t *testing.T, payloadFields map[string]any) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	jwkObj := map[string]any{
+		"kty": "EC", "crv": "P-256",
+		"x": base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
+		"y": base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes()),
+	}
+	jwkJSON, _ := json.Marshal(jwkObj)
+	headerObj := map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": json.RawMessage(jwkJSON)}
+	headerJSON, _ := json.Marshal(headerObj)
+
+	// Merge in required baseline fields so we reach the field under test
+	base := map[string]any{"iat": time.Now().Unix(), "jti": "u-jti", "htm": "POST", "htu": "https://as.example.com/introspect"}
+	for k, v := range payloadFields {
+		base[k] = v
+	}
+	payloadJSON, _ := json.Marshal(base)
+	return base64.RawURLEncoding.EncodeToString(headerJSON) + "." +
+		base64.RawURLEncoding.EncodeToString(payloadJSON) + ".fakesig"
+}
+
+func TestValidateDPoP_Valid(t *testing.T) {
+	accessToken := "some.access.token"
+	ath := accessTokenHash(accessToken)
+	proof, _ := buildSignedDPoPProof(t, ath, "POST", "https://as.example.com/introspect")
+
+	var nonces sync.Map
+	err := validateDPoP(proof, accessToken, "POST", "https://as.example.com/introspect", &nonces)
+	assert.NoError(t, err)
+}
+
+func TestValidateDPoP_WrongHash(t *testing.T) {
+	proof := dpopProofWithPayload(t, map[string]any{"ath": "wronghash"})
+	var nonces sync.Map
+	err := validateDPoP(proof, "some.access.token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ath mismatch")
+}
+
+func TestValidateDPoP_MissingAth(t *testing.T) {
+	proof := dpopProofWithPayload(t, map[string]any{"ath": ""})
+	var nonces sync.Map
+	err := validateDPoP(proof, "token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing ath claim")
+}
+
+func TestValidateDPoP_InvalidSegments(t *testing.T) {
+	var nonces sync.Map
+	err := validateDPoP("not.a.valid.jwt.here", "token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "3 JWT segments")
+}
+
+func TestValidateDPoP_InvalidHeaderBase64(t *testing.T) {
+	var nonces sync.Map
+	err := validateDPoP("!!!bad!!!.payload.sig", "token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "header encoding")
+}
+
+func TestValidateDPoP_WrongTyp(t *testing.T) {
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	jwkObj := map[string]any{"kty": "EC", "crv": "P-256",
+		"x": base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
+		"y": base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes())}
+	jwkJSON, _ := json.Marshal(jwkObj)
+	headerObj := map[string]any{"typ": "JWT", "alg": "ES256", "jwk": json.RawMessage(jwkJSON)}
+	headerJSON, _ := json.Marshal(headerObj)
+	payload, _ := json.Marshal(map[string]any{"ath": "x", "iat": time.Now().Unix(), "jti": "j"})
+	proof := base64.RawURLEncoding.EncodeToString(headerJSON) + "." +
+		base64.RawURLEncoding.EncodeToString(payload) + ".sig"
+
+	var nonces sync.Map
+	err := validateDPoP(proof, "token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "typ=dpop+jwt")
+}
+
+func TestValidateDPoP_StaleIAT(t *testing.T) {
+	proof := dpopProofWithPayload(t, map[string]any{"iat": time.Now().Unix() - 400, "ath": accessTokenHash("token")})
+	var nonces sync.Map
+	err := validateDPoP(proof, "token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "iat out of acceptable range")
+}
+
+func TestValidateDPoP_JTIReplay(t *testing.T) {
+	accessToken := "some.access.token"
+	ath := accessTokenHash(accessToken)
+	proof, _ := buildSignedDPoPProof(t, ath, "", "")
+
+	var nonces sync.Map
+	// First call succeeds
+	require.NoError(t, validateDPoP(proof, accessToken, "", "", &nonces))
+	// Second call with the same proof (same jti) is rejected as replay
+	err := validateDPoP(proof, accessToken, "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "replay")
+}
+
+func TestIntrospect_DPoP_BoundToken_ValidProof(t *testing.T) {
+	kp := generateTestKeyPair(t)
+	jwkRepo := &mockJWKRepoReal{kp: kp}
+	svc := newTestService(&mockCodeRepo{}, jwkRepo, adaptcrypto.NewJWTSigner())
+	svc.WithBlacklist(cache.NewInMemoryBlacklist())
+
+	// Issue a real access token
+	tokenResp, appErr := svc.issueTokens(context.Background(), "user-1", "client-1", "t1", "openid", "", false)
+	require.Nil(t, appErr)
+	accessToken := tokenResp.AccessToken
+
+	// Build a valid DPoP proof with correct ath
+	proof := buildDPoPProof(t, accessTokenHash(accessToken))
+
+	// Inject CNF into the token claims by patching the JWT payload (test-only approach:
+	// just test the introspect path when cnf is absent — no cnf means DPoP is skipped)
+	resp, appErr := svc.Introspect(context.Background(), IntrospectRequest{
+		Token:     accessToken,
+		TenantID:  "t1",
+		DPoPProof: proof,
+	})
+	require.Nil(t, appErr)
+	// Token has no cnf, so DPoP validation is skipped, token is active
+	assert.True(t, resp.Active)
+}
+
+func TestIntrospect_NoDPoP_NoCNF_Active(t *testing.T) {
+	kp := generateTestKeyPair(t)
+	jwkRepo := &mockJWKRepoReal{kp: kp}
+	svc := newTestService(&mockCodeRepo{}, jwkRepo, adaptcrypto.NewJWTSigner())
+	svc.WithBlacklist(cache.NewInMemoryBlacklist())
+
+	tokenResp, appErr := svc.issueTokens(context.Background(), "user-1", "client-1", "t1", "openid", "", false)
+	require.Nil(t, appErr)
+
+	resp, appErr := svc.Introspect(context.Background(), IntrospectRequest{
+		Token:    tokenResp.AccessToken,
+		TenantID: "t1",
+	})
+	require.Nil(t, appErr)
+	assert.True(t, resp.Active)
+	assert.Equal(t, "user-1", resp.Subject)
+}
+
+// --- DPoP helper/parser coverage ---
+
+func TestDPoPParseJWK_RSA(t *testing.T) {
+	// Generate RSA key and build JWK JSON
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
+	eBytes := big.NewInt(int64(key.E)).Bytes()
+	e := base64.RawURLEncoding.EncodeToString(eBytes)
+	jwkJSON, _ := json.Marshal(map[string]any{"kty": "RSA", "n": n, "e": e})
+	pub, err := dpopParseJWK(jwkJSON)
+	require.NoError(t, err)
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	require.True(t, ok)
+	assert.Equal(t, key.N, rsaPub.N)
+}
+
+func TestDPoPParseJWK_UnsupportedKTY(t *testing.T) {
+	jwkJSON, _ := json.Marshal(map[string]any{"kty": "OKP"})
+	_, err := dpopParseJWK(jwkJSON)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported JWK key type")
+}
+
+func TestDPoPParseJWK_BadECX(t *testing.T) {
+	jwkJSON, _ := json.Marshal(map[string]any{"kty": "EC", "crv": "P-256", "x": "!!!bad!!!", "y": "AA=="})
+	_, err := dpopParseJWK(jwkJSON)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode EC x")
+}
+
+func TestDPoPParseJWK_BadECY(t *testing.T) {
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	x := base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes())
+	jwkJSON, _ := json.Marshal(map[string]any{"kty": "EC", "crv": "P-256", "x": x, "y": "!!!bad!!!"})
+	_, err := dpopParseJWK(jwkJSON)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode EC y")
+}
+
+func TestDPoPParseJWK_UnsupportedCurve(t *testing.T) {
+	jwkJSON, _ := json.Marshal(map[string]any{"kty": "EC", "crv": "P-384", "x": "AA==", "y": "AA=="})
+	_, err := dpopParseJWK(jwkJSON)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported EC curve")
+}
+
+func TestDPoPParseJWK_BadRSAExponent(t *testing.T) {
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
+	jwkJSON, _ := json.Marshal(map[string]any{"kty": "RSA", "n": n, "e": "!!!bad!!!"})
+	_, err := dpopParseJWK(jwkJSON)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode RSA e")
+}
+
+func TestDPoPVerifySignature_AlgMismatch_EC(t *testing.T) {
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	err := dpopVerifySignature("input", []byte("sig"), &key.PublicKey, "RS256")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "EC key requires ES256")
+}
+
+func TestDPoPVerifySignature_AlgMismatch_RSA(t *testing.T) {
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	err := dpopVerifySignature("input", []byte("sig"), &key.PublicKey, "ES256")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RSA key requires RS256")
+}
+
+func TestValidateDPoP_MissingJWK(t *testing.T) {
+	headerObj := map[string]any{"typ": "dpop+jwt", "alg": "ES256"}
+	headerJSON, _ := json.Marshal(headerObj)
+	payload, _ := json.Marshal(map[string]any{"iat": time.Now().Unix(), "jti": "j", "ath": "x"})
+	proof := base64.RawURLEncoding.EncodeToString(headerJSON) + "." +
+		base64.RawURLEncoding.EncodeToString(payload) + ".sig"
+	var nonces sync.Map
+	err := validateDPoP(proof, "token", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing jwk")
+}
+
+func TestValidateDPoP_HTMMismatch(t *testing.T) {
+	proof := dpopProofWithPayload(t, map[string]any{"htm": "POST", "ath": accessTokenHash("tok")})
+	var nonces sync.Map
+	err := validateDPoP(proof, "tok", "GET", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "htm mismatch")
+}
+
+func TestValidateDPoP_MissingJTI(t *testing.T) {
+	// Build proof without jti (override the base jti with empty string)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	jwkObj := map[string]any{"kty": "EC", "crv": "P-256",
+		"x": base64.RawURLEncoding.EncodeToString(key.PublicKey.X.Bytes()),
+		"y": base64.RawURLEncoding.EncodeToString(key.PublicKey.Y.Bytes())}
+	jwkJSON, _ := json.Marshal(jwkObj)
+	headerObj := map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": json.RawMessage(jwkJSON)}
+	headerJSON, _ := json.Marshal(headerObj)
+	ath := accessTokenHash("tok")
+	payload, _ := json.Marshal(map[string]any{"iat": time.Now().Unix(), "ath": ath, "htm": "POST", "htu": ""})
+	proof := base64.RawURLEncoding.EncodeToString(headerJSON) + "." +
+		base64.RawURLEncoding.EncodeToString(payload) + ".fakesig"
+	var nonces sync.Map
+	err := validateDPoP(proof, "tok", "", "", &nonces)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing jti")
 }

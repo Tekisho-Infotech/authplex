@@ -87,3 +87,18 @@ type UserSummary struct {
 	Enabled       bool      `json:"enabled"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+// UserExportResponse contains all personal data held for a user (GDPR Art. 15/20).
+type UserExportResponse struct {
+	ID               string     `json:"id"`
+	TenantID         string     `json:"tenant_id"`
+	Email            string     `json:"email"`
+	Name             string     `json:"name"`
+	Phone            string     `json:"phone,omitempty"`
+	EmailVerified    bool       `json:"email_verified"`
+	PhoneVerified    bool       `json:"phone_verified"`
+	ConsentGranted   bool       `json:"consent_granted"`
+	ConsentTimestamp *time.Time `json:"consent_timestamp,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}

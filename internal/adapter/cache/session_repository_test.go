@@ -52,7 +52,7 @@ func TestSessionRepo_DeleteByUserID(t *testing.T) {
 	repo.Create(ctx, s2) //nolint:errcheck
 	repo.Create(ctx, s3) //nolint:errcheck
 
-	require.NoError(t, repo.DeleteByUserID(ctx, "user-1"))
+	require.NoError(t, repo.DeleteByUserID(ctx, "user-1", "t1"))
 
 	_, err := repo.GetByID(ctx, "sess-1")
 	require.Error(t, err)
