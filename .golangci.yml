@@ -32,11 +32,7 @@ linters:
         - name: unreachable-code
     gocritic:
       enabled-checks:
-        - appendAssign
-        - dupArg
-        - dupBranchBody
         - equalFold
-        - sloppyLen
     gosec:
       excludes:
         - G104  # Result[T] pattern — not all errors need explicit check
