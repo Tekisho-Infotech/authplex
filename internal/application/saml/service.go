@@ -302,7 +302,7 @@ func fetchIDPMetadata(metadataURL string) (*crewsaml.EntityDescriptor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d from metadata URL", resp.StatusCode)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -11,14 +12,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
 	auditsvc "github.com/authplex/internal/application/audit"
+	securitysvc "github.com/authplex/internal/application/security"
 	"github.com/authplex/internal/application/jwks"
 	domainaudit "github.com/authplex/internal/domain/audit"
 	"github.com/authplex/internal/domain/client"
@@ -41,6 +45,7 @@ type Service struct {
 	assignRepo    rbac.AssignmentRepository
 	clientRepo    client.Repository
 	auditSvc      *auditsvc.Service
+	alerter       securitysvc.AlertObserver
 	jwksSvc       *jwks.Service
 	signer        token.Signer
 	logger        *slog.Logger
@@ -49,6 +54,8 @@ type Service struct {
 	idTokenTTL    time.Duration
 	refreshTTL    time.Duration
 	deviceTTL     time.Duration
+	// dpopNonces tracks DPoP proof JTI values to prevent replay within the proof's IAT window.
+	dpopNonces sync.Map
 }
 
 // NewService creates a new auth service.
@@ -116,6 +123,12 @@ func (s *Service) WithRBAC(assignRepo rbac.AssignmentRepository) *Service {
 // WithAudit configures audit event logging.
 func (s *Service) WithAudit(a *auditsvc.Service) *Service {
 	s.auditSvc = a
+	return s
+}
+
+// WithAlerter registers the security alerter for token replay detection.
+func (s *Service) WithAlerter(a securitysvc.AlertObserver) *Service {
+	s.alerter = a
 	return s
 }
 
@@ -298,6 +311,9 @@ func (s *Service) exchangeRefreshToken(ctx context.Context, req TokenRequest) (t
 	if rt.Rotated {
 		s.refreshRepo.RevokeFamily(ctx, rt.FamilyID) //nolint:errcheck
 		s.logger.Warn("refresh token replay detected", "family_id", rt.FamilyID)
+		if s.alerter != nil {
+			s.alerter.ObserveTokenReplay(ctx, rt.TenantID, rt.ClientID, "")
+		}
 		return token.TokenResponse{}, apperrors.New(apperrors.ErrBadRequest, "refresh token has been reused")
 	}
 
@@ -487,7 +503,7 @@ func (s *Service) Introspect(ctx context.Context, req IntrospectRequest) (Intros
 	// Decode and verify JWT signature
 	claims, err := s.verifyAndDecodeJWT(ctx, req.Token)
 	if err != nil {
-		return IntrospectResponse{Active: false}, nil
+		return IntrospectResponse{Active: false}, nil //nolint:nilerr // invalid token → inactive, not an error to the caller
 	}
 
 	now := time.Now().UTC().Unix()
@@ -520,6 +536,15 @@ func (s *Service) Introspect(ctx context.Context, req IntrospectRequest) (Intros
 		}
 	}
 
+	// DPoP proof validation (RFC 9449 Section 7.1).
+	// Only enforced when the token carries a cnf.jkt binding AND a DPoP proof was presented.
+	if req.DPoPProof != "" && claims.CNF != nil && claims.CNF.JKT != "" {
+		if err := validateDPoP(req.DPoPProof, req.Token, req.HTTPMethod, req.HTTPURI, &s.dpopNonces); err != nil {
+			s.logger.Warn("DPoP proof validation failed", "error", err)
+			return IntrospectResponse{Active: false}, nil
+		}
+	}
+
 	return IntrospectResponse{
 		Active:    true,
 		Scope:     "",
@@ -543,7 +568,7 @@ func (s *Service) issueTokensWithEndpoints(ctx context.Context, subject, clientI
 	if len(endpoints) > 0 {
 		kp, keyErr := s.jwksSvc.GetActiveKeyPair(ctx, tenantID)
 		if keyErr != nil {
-			return resp, nil // fallback: return token without endpoint claims
+			return resp, nil //nolint:nilerr // key unavailable — return token without endpoint claims
 		}
 
 		now := time.Now().UTC()
@@ -830,10 +855,10 @@ func (s *Service) verifyAndDecodeJWT(ctx context.Context, jwtToken string) (toke
 	// Get the active key pair for signature verification
 	kp, kpErr := s.jwksSvc.GetActiveKeyPair(ctx, tenantID)
 	if kpErr != nil {
-		// Cannot verify signature without key — fall back to claims-only
-		// This happens for tokens issued before tenant_id was added to claims
+		// Cannot verify signature without key — fall back to claims-only.
+		// Occurs for tokens issued before tenant_id was embedded in claims.
 		s.logger.Warn("JWT signature verification skipped: no key found", "tenant_id", tenantID)
-		return claims, nil
+		return claims, nil //nolint:nilerr
 	}
 
 	// Verify signature
@@ -891,6 +916,195 @@ func verifySignature(signingInput string, signature, publicKeyPEM []byte, algori
 
 	default:
 		return apperrors.New(apperrors.ErrTokenInvalid, "unsupported algorithm: "+algorithm)
+	}
+}
+
+// validateDPoP performs full RFC 9449 DPoP proof validation:
+// signature over header.payload, typ=dpop+jwt, iat freshness, htm/htu binding,
+// ath token hash, and in-process jti replay prevention.
+func validateDPoP(proof, accessToken, htm, htu string, nonces *sync.Map) error {
+	parts := strings.Split(proof, ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("invalid DPoP proof: expected 3 JWT segments, got %d", len(parts))
+	}
+
+	// Parse header
+	headerJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return fmt.Errorf("invalid DPoP proof header encoding: %w", err)
+	}
+	var header struct {
+		Typ string          `json:"typ"`
+		Alg string          `json:"alg"`
+		JWK json.RawMessage `json:"jwk"`
+	}
+	if err := json.Unmarshal(headerJSON, &header); err != nil {
+		return fmt.Errorf("invalid DPoP proof header JSON: %w", err)
+	}
+	if header.Typ != "dpop+jwt" {
+		return fmt.Errorf("DPoP proof must have typ=dpop+jwt, got %q", header.Typ)
+	}
+	if len(header.JWK) == 0 {
+		return fmt.Errorf("DPoP proof missing jwk in header")
+	}
+
+	// Parse payload
+	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid DPoP proof payload encoding: %w", err)
+	}
+	var claims struct {
+		JTI string `json:"jti"`
+		HTM string `json:"htm"`
+		HTU string `json:"htu"`
+		IAT int64  `json:"iat"`
+		Ath string `json:"ath"`
+	}
+	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
+		return fmt.Errorf("invalid DPoP proof payload JSON: %w", err)
+	}
+
+	// Verify iat freshness — RFC 9449 recommends a 5-minute window
+	if claims.IAT == 0 {
+		return fmt.Errorf("DPoP proof missing iat claim")
+	}
+	now := time.Now().Unix()
+	if now-claims.IAT > 300 || claims.IAT-now > 60 {
+		return fmt.Errorf("DPoP proof iat out of acceptable range")
+	}
+
+	// Verify htm (HTTP method) when provided by the caller
+	if htm != "" && !strings.EqualFold(claims.HTM, htm) {
+		return fmt.Errorf("DPoP proof htm mismatch: proof=%q request=%q", claims.HTM, htm)
+	}
+
+	// Verify htu (HTTP URI) when provided by the caller
+	if htu != "" && claims.HTU != htu {
+		return fmt.Errorf("DPoP proof htu mismatch")
+	}
+
+	// Verify ath = BASE64URL(SHA-256(ASCII(access_token)))
+	if claims.Ath == "" {
+		return fmt.Errorf("DPoP proof missing ath claim")
+	}
+	athHash := sha256.Sum256([]byte(accessToken))
+	if claims.Ath != base64.RawURLEncoding.EncodeToString(athHash[:]) {
+		return fmt.Errorf("DPoP proof ath mismatch")
+	}
+
+	// Verify jti uniqueness — prevents replay within the proof's validity window
+	if claims.JTI == "" {
+		return fmt.Errorf("DPoP proof missing jti claim")
+	}
+	if _, loaded := nonces.LoadOrStore(claims.JTI, claims.IAT); loaded {
+		return fmt.Errorf("DPoP proof jti already used (replay detected)")
+	}
+
+	// Parse the embedded JWK and verify the proof's signature
+	pubKey, err := dpopParseJWK(header.JWK)
+	if err != nil {
+		return fmt.Errorf("DPoP proof invalid jwk: %w", err)
+	}
+	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return fmt.Errorf("DPoP proof invalid signature encoding: %w", err)
+	}
+	return dpopVerifySignature(parts[0]+"."+parts[1], sigBytes, pubKey, header.Alg)
+}
+
+// dpopParseJWK converts a raw JWK JSON object into a crypto.PublicKey.
+// Only P-256 EC keys (ES256) and RSA keys (RS256) are accepted.
+func dpopParseJWK(raw json.RawMessage) (crypto.PublicKey, error) {
+	var kty struct {
+		KTY string `json:"kty"`
+	}
+	if err := json.Unmarshal(raw, &kty); err != nil {
+		return nil, fmt.Errorf("parse kty: %w", err)
+	}
+	switch kty.KTY {
+	case "EC":
+		var ecKey struct {
+			CRV string `json:"crv"`
+			X   string `json:"x"`
+			Y   string `json:"y"`
+		}
+		if err := json.Unmarshal(raw, &ecKey); err != nil {
+			return nil, fmt.Errorf("parse EC JWK: %w", err)
+		}
+		if ecKey.CRV != "P-256" {
+			return nil, fmt.Errorf("unsupported EC curve: %s", ecKey.CRV)
+		}
+		xBytes, err := base64.RawURLEncoding.DecodeString(ecKey.X)
+		if err != nil {
+			return nil, fmt.Errorf("decode EC x: %w", err)
+		}
+		yBytes, err := base64.RawURLEncoding.DecodeString(ecKey.Y)
+		if err != nil {
+			return nil, fmt.Errorf("decode EC y: %w", err)
+		}
+		return &ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     new(big.Int).SetBytes(xBytes),
+			Y:     new(big.Int).SetBytes(yBytes),
+		}, nil
+
+	case "RSA":
+		var rsaKey struct {
+			N string `json:"n"`
+			E string `json:"e"`
+		}
+		if err := json.Unmarshal(raw, &rsaKey); err != nil {
+			return nil, fmt.Errorf("parse RSA JWK: %w", err)
+		}
+		nBytes, err := base64.RawURLEncoding.DecodeString(rsaKey.N)
+		if err != nil {
+			return nil, fmt.Errorf("decode RSA n: %w", err)
+		}
+		eBytes, err := base64.RawURLEncoding.DecodeString(rsaKey.E)
+		if err != nil {
+			return nil, fmt.Errorf("decode RSA e: %w", err)
+		}
+		eInt := new(big.Int).SetBytes(eBytes)
+		if !eInt.IsInt64() {
+			return nil, fmt.Errorf("RSA exponent too large")
+		}
+		return &rsa.PublicKey{
+			N: new(big.Int).SetBytes(nBytes),
+			E: int(eInt.Int64()),
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported JWK key type: %s", kty.KTY)
+	}
+}
+
+// dpopVerifySignature verifies an RSA or ECDSA JWT signature.
+// The algorithm is cross-checked against the public key type to prevent
+// algorithm confusion attacks.
+func dpopVerifySignature(signingInput string, signature []byte, pubKey crypto.PublicKey, alg string) error {
+	hash := sha256.Sum256([]byte(signingInput))
+	switch pub := pubKey.(type) {
+	case *ecdsa.PublicKey:
+		if alg != "ES256" {
+			return fmt.Errorf("EC key requires ES256, got %q", alg)
+		}
+		byteLen := (pub.Curve.Params().BitSize + 7) / 8
+		if len(signature) != 2*byteLen {
+			return fmt.Errorf("invalid ECDSA signature length")
+		}
+		r := new(big.Int).SetBytes(signature[:byteLen])
+		s := new(big.Int).SetBytes(signature[byteLen:])
+		if !ecdsa.Verify(pub, hash[:], r, s) {
+			return fmt.Errorf("DPoP proof ECDSA signature verification failed")
+		}
+		return nil
+	case *rsa.PublicKey:
+		if alg != "RS256" {
+			return fmt.Errorf("RSA key requires RS256, got %q", alg)
+		}
+		return rsa.VerifyPKCS1v15(pub, crypto.SHA256, hash[:], signature)
+	default:
+		return fmt.Errorf("unsupported public key type")
 	}
 }
 

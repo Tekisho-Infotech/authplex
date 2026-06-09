@@ -20,5 +20,6 @@ type SessionRepository interface {
 	Create(ctx context.Context, s Session) error
 	GetByID(ctx context.Context, id string) (Session, error)
 	Delete(ctx context.Context, id string) error
-	DeleteByUserID(ctx context.Context, userID string) error
+	DeleteByUserID(ctx context.Context, userID, tenantID string) error
+	DeleteExpired(ctx context.Context) (int64, error)
 }

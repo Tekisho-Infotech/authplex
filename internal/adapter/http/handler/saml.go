@@ -45,7 +45,7 @@ func (h *SAMLHandler) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write(xmlBytes) //nolint:errcheck
+	w.Write(xmlBytes) //nolint:errcheck,gosec
 }
 
 // HandleSSO serves GET /saml/sso — initiates SAML SSO by redirecting to IdP.

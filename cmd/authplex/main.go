@@ -32,13 +32,14 @@ import (
 	adaptsms "github.com/authplex/internal/adapter/sms"
 	adminsvc "github.com/authplex/internal/application/admin"
 	"github.com/authplex/internal/application/auth"
+	auditsvc "github.com/authplex/internal/application/audit"
 	"github.com/authplex/internal/application/cleanup"
 	clientsvc "github.com/authplex/internal/application/client"
 	"github.com/authplex/internal/application/discovery"
 	"github.com/authplex/internal/application/jwks"
 	mfasvc "github.com/authplex/internal/application/mfa"
 	providersvc "github.com/authplex/internal/application/provider"
-	auditsvc "github.com/authplex/internal/application/audit"
+	securitysvc "github.com/authplex/internal/application/security"
 	webhooksvc "github.com/authplex/internal/application/webhook"
 	rbacsvc "github.com/authplex/internal/application/rbac"
 	domainadmin "github.com/authplex/internal/domain/admin"
@@ -105,6 +106,7 @@ type repos struct {
 	audit           domainaudit.Repository
 	adminUser       domainadmin.AdminUserRepository
 	webhook         webhook.Repository
+	otp             domainotp.Repository
 }
 
 // setupInMemoryRepos creates all in-memory repositories (development mode).
@@ -131,6 +133,7 @@ func setupInMemoryRepos() repos {
 		audit:      cache.NewInMemoryAuditRepository(),
 		adminUser:  cache.NewInMemoryAdminUserRepository(),
 		webhook:    cache.NewInMemoryWebhookRepository(),
+		otp:        cache.NewInMemoryOTPRepository(),
 	}
 }
 
@@ -146,7 +149,7 @@ func setupProdRepos(db *sql.DB, redisClient *adaptredis.Client) repos {
 		refresh:    postgres.NewRefreshTokenRepository(db),
 		provider:   postgres.NewProviderRepository(db),
 		externalID: postgres.NewExternalIdentityRepository(db),
-		session:    adaptredis.NewSessionRepository(rdb),
+		session:    postgres.NewSessionRepository(db),
 		code:       adaptredis.NewCodeRepository(rdb),
 		device:     adaptredis.NewDeviceCodeRepository(rdb),
 		blacklist:  adaptredis.NewTokenBlacklist(rdb),
@@ -159,6 +162,7 @@ func setupProdRepos(db *sql.DB, redisClient *adaptredis.Client) repos {
 		audit:      postgres.NewAuditRepository(db),
 		adminUser:  cache.NewInMemoryAdminUserRepository(),
 		webhook:    cache.NewInMemoryWebhookRepository(),
+		otp:        adaptredis.NewOTPRepository(rdb),
 	}
 }
 
@@ -173,7 +177,7 @@ func setupPostgresRepos(db *sql.DB) repos {
 		refresh:    postgres.NewRefreshTokenRepository(db),
 		provider:   postgres.NewProviderRepository(db),
 		externalID: postgres.NewExternalIdentityRepository(db),
-		session:    cache.NewInMemorySessionRepository(),
+		session:    postgres.NewSessionRepository(db),
 		code:       cache.NewInMemoryCodeRepository(),
 		device:     cache.NewInMemoryDeviceRepository(),
 		blacklist:  cache.NewInMemoryBlacklist(),
@@ -186,16 +190,20 @@ func setupPostgresRepos(db *sql.DB) repos {
 		audit:      postgres.NewAuditRepository(db),
 		adminUser:  cache.NewInMemoryAdminUserRepository(),
 		webhook:    cache.NewInMemoryWebhookRepository(),
+		otp:        cache.NewInMemoryOTPRepository(),
 	}
 }
 
 // setupServer creates the HTTP handler with all routes wired.
 func setupServer(cfg config.Config, log *slog.Logger) http.Handler {
-	return setupServerWithRepos(cfg, log, setupInMemoryRepos())
+	h, _ := setupServerWithRepos(cfg, log, setupInMemoryRepos())
+	return h
 }
 
 // setupServerWithRepos creates the HTTP handler with the given repositories.
-func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Handler {
+// The returned alerter must have Stop() called during graceful shutdown to release
+// the background cleanup goroutine.
+func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) (http.Handler, *securitysvc.Alerter) {
 	keyGen := adaptcrypto.NewKeyGenerator()
 	keyConv := adaptcrypto.NewJWKConverter()
 	hasher := adaptcrypto.NewBcryptHasher()
@@ -214,6 +222,21 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 	auditService := auditsvc.NewService(r.audit, log)
 	auditService.WithWebhooks(webhookService)
 
+	alerter := securitysvc.NewAlerter(log).
+		WithHandler(func(ctx context.Context, alert securitysvc.Alert) {
+			// Detach from the caller's context so delivery isn't cancelled when
+			// the audit log call returns.
+			go webhookService.Deliver(context.WithoutCancel(ctx), alert.TenantID, string(alert.Type), map[string]any{
+				"alert_type": alert.Type,
+				"actor_id":   alert.ActorID,
+				"ip":         alert.IP,
+				"count":      alert.Count,
+				"window_s":   int(alert.Window.Seconds()),
+				"timestamp":  alert.Timestamp,
+			})
+		})
+	auditService.WithAlerter(alerter)
+
 	clientService := clientsvc.NewService(r.client, hasher, log)
 	clientService.WithAudit(auditService)
 	tenantSvc := tenantsvc.NewService(r.tenant, log)
@@ -224,6 +247,7 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 	// Wire RBAC into auth service for JWT claims
 	authSvc.WithRBAC(r.assignment)
 	authSvc.WithAudit(auditService)
+	authSvc.WithAlerter(alerter)
 	authSvc.WithClientRepo(r.client)
 	// Wire repos needed for tenant-aware issuer and token version lookups
 	authSvc.WithTenantRepo(r.tenant)
@@ -255,9 +279,8 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 		smsSender = adaptsms.NewConsoleSender(log)
 	}
 
-	otpRepo := cache.NewInMemoryOTPRepository()
 	userService := usersvc.NewService(r.user, r.session, hasher, log).
-		WithOTP(otpRepo, emailSender, smsSender)
+		WithOTP(r.otp, emailSender, smsSender)
 	userService.WithAudit(auditService)
 
 	authSvc.WithUserValidator(userService)
@@ -271,7 +294,8 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 	adminAuth := middleware.NewAdminAuth(cfg.AdminAPIKey).
 		WithJWTVerifier(buildAdminJWTVerifier(jwksSvc))
 	authRateLimiter := middleware.NewRateLimiter(20, 1*time.Minute)
-	tenantResolver := middleware.NewTenantResolver(tenantSvc, cfg.TenantMode, log)
+	tenantResolver := middleware.NewTenantResolver(tenantSvc, cfg.TenantMode, log).
+		WithDefaultTenant(cfg.DefaultTenantID)
 
 	// HTTP handlers
 	discoveryHandler := handler.NewDiscoveryHandler(discoverySvc)
@@ -387,6 +411,13 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 			}
 			return
 		}
+		// /users/{id}/roles must be checked before the generic /roles branch,
+		// otherwise strings.Contains("/users/x/roles", "/roles") matches first
+		// and HandleUserRoles is never reached.
+		if strings.Contains(r.URL.Path, "/users/") && strings.HasSuffix(r.URL.Path, "/roles") {
+			rbacHandler.HandleUserRoles(w, r)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/roles") {
 			if strings.Count(r.URL.Path, "/") >= 4 {
 				rbacHandler.HandleRole(w, r)
@@ -399,12 +430,16 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 			userHandler.HandleListUsers(w, r)
 			return
 		}
-		if strings.Contains(r.URL.Path, "/users/") && strings.Contains(r.URL.Path, "/permissions") {
-			rbacHandler.HandleUserPermissions(w, r)
+		if strings.Contains(r.URL.Path, "/users/") && strings.HasSuffix(r.URL.Path, "/purge") {
+			userHandler.HandlePurgeUser(w, r)
 			return
 		}
-		if strings.Contains(r.URL.Path, "/users/") && strings.HasSuffix(r.URL.Path, "/roles") {
-			rbacHandler.HandleUserRoles(w, r)
+		if strings.Contains(r.URL.Path, "/users/") && strings.HasSuffix(r.URL.Path, "/export") {
+			userHandler.HandleExportUser(w, r)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/users/") && strings.Contains(r.URL.Path, "/permissions") {
+			rbacHandler.HandleUserPermissions(w, r)
 			return
 		}
 		if strings.Contains(r.URL.Path, "/webhooks") {
@@ -438,8 +473,8 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) http.Han
 		})
 	})
 
-	// Wrap entire mux: request ID → security headers → tracing → CORS
-	return middleware.RequestID(middleware.SecurityHeaders(tracingMiddleware.Middleware(corsMiddleware.Middleware(mux))))
+	// Wrap entire mux: HTTPS enforcement → request ID → security headers → tracing → CORS
+	return middleware.RequireHTTPS(cfg.EnforceHTTPS)(middleware.RequestID(middleware.SecurityHeaders(tracingMiddleware.Middleware(corsMiddleware.Middleware(mux))))), alerter
 }
 
 // connectDB opens and verifies a database connection, runs migrations.
@@ -478,7 +513,7 @@ func buildAdminJWTVerifier(jwksSvc *jwks.Service) middleware.JWTVerifier {
 			return nil, fmt.Errorf("malformed JWT")
 		}
 
-		// Decode header for algorithm
+		// Decode header — only to validate alg is a known asymmetric algorithm
 		headerJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
 		if err != nil {
 			return nil, fmt.Errorf("invalid header encoding")
@@ -489,8 +524,11 @@ func buildAdminJWTVerifier(jwksSvc *jwks.Service) middleware.JWTVerifier {
 		if err := json.Unmarshal(headerJSON, &header); err != nil {
 			return nil, fmt.Errorf("invalid header")
 		}
+		if header.Alg != "RS256" && header.Alg != "ES256" {
+			return nil, fmt.Errorf("unsupported algorithm: %s", header.Alg)
+		}
 
-		// Decode payload to get audience (admin tokens use "authplex-admin")
+		// Decode payload
 		payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
 		if err != nil {
 			return nil, fmt.Errorf("invalid payload encoding")
@@ -500,6 +538,7 @@ func buildAdminJWTVerifier(jwksSvc *jwks.Service) middleware.JWTVerifier {
 			Audience  []string `json:"aud"`
 			ExpiresAt int64    `json:"exp"`
 			Roles     []string `json:"roles"`
+			TenantIDs []string `json:"tenant_ids"`
 		}
 		if err := json.Unmarshal(payloadJSON, &claims); err != nil {
 			return nil, fmt.Errorf("invalid claims")
@@ -526,13 +565,14 @@ func buildAdminJWTVerifier(jwksSvc *jwks.Service) middleware.JWTVerifier {
 			return nil, fmt.Errorf("missing subject")
 		}
 
-		// Get signing key for "default" tenant (admin tokens are signed with default tenant key)
-		kp, kpErr := jwksSvc.GetActiveKeyPair(context.Background(), "default")
+		// Admin tokens are signed with the dedicated __admin__ key namespace
+		const adminKeyNamespace = "__admin__"
+		kp, kpErr := jwksSvc.GetActiveKeyPair(context.Background(), adminKeyNamespace)
 		if kpErr != nil {
 			return nil, fmt.Errorf("no signing key available for verification")
 		}
 
-		// Verify signature
+		// Verify signature — algorithm is derived from the key type, not the token header
 		signingInput := parts[0] + "." + parts[1]
 		sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
 		if err != nil {
@@ -553,14 +593,17 @@ func buildAdminJWTVerifier(jwksSvc *jwks.Service) middleware.JWTVerifier {
 		}
 
 		return &middleware.AdminContext{
-			Role:    role,
-			AdminID: claims.Subject,
+			Role:      role,
+			AdminID:   claims.Subject,
+			TenantIDs: claims.TenantIDs,
 		}, nil
 	}
 }
 
 // adminVerifySignature verifies RSA or ECDSA signature with a PEM-encoded public key.
-func adminVerifySignature(signingInput string, signature, publicKeyPEM []byte, algorithm string) error {
+// The algorithm is derived from the key type — claimedAlg is validated against the key
+// to detect algorithm confusion attacks (e.g. RS256 token presented with an EC key).
+func adminVerifySignature(signingInput string, signature, publicKeyPEM []byte, claimedAlg string) error {
 	block, _ := pem.Decode(publicKeyPEM)
 	if block == nil {
 		return fmt.Errorf("failed to decode public key PEM")
@@ -573,30 +616,28 @@ func adminVerifySignature(signingInput string, signature, publicKeyPEM []byte, a
 
 	hash := sha256.Sum256([]byte(signingInput))
 
-	switch algorithm {
-	case "RS256":
-		rsaPub, ok := pubKey.(*rsa.PublicKey)
-		if !ok {
-			return fmt.Errorf("expected RSA public key")
+	switch pub := pubKey.(type) {
+	case *rsa.PublicKey:
+		if claimedAlg != "RS256" {
+			return fmt.Errorf("key type requires RS256, token header claims %q", claimedAlg)
 		}
-		return rsa.VerifyPKCS1v15(rsaPub, crypto.SHA256, hash[:], signature)
-	case "ES256":
-		ecPub, ok := pubKey.(*ecdsa.PublicKey)
-		if !ok {
-			return fmt.Errorf("expected EC public key")
+		return rsa.VerifyPKCS1v15(pub, crypto.SHA256, hash[:], signature)
+	case *ecdsa.PublicKey:
+		if claimedAlg != "ES256" {
+			return fmt.Errorf("key type requires ES256, token header claims %q", claimedAlg)
 		}
-		byteLen := (ecPub.Curve.Params().BitSize + 7) / 8
+		byteLen := (pub.Curve.Params().BitSize + 7) / 8
 		if len(signature) != 2*byteLen {
 			return fmt.Errorf("invalid ECDSA signature length")
 		}
 		r := new(big.Int).SetBytes(signature[:byteLen])
 		s := new(big.Int).SetBytes(signature[byteLen:])
-		if !ecdsa.Verify(ecPub, hash[:], r, s) {
+		if !ecdsa.Verify(pub, hash[:], r, s) {
 			return fmt.Errorf("ECDSA verification failed")
 		}
 		return nil
 	default:
-		return fmt.Errorf("unsupported algorithm: %s", algorithm)
+		return fmt.Errorf("unsupported key type")
 	}
 }
 
@@ -612,6 +653,7 @@ func run() error {
 
 	var mux http.Handler
 	var r repos
+	var alerter *securitysvc.Alerter
 
 	if cfg.Environment != logger.Local {
 		db, err := connectDB(context.Background(), cfg, log)
@@ -635,12 +677,13 @@ func run() error {
 			r = setupPostgresRepos(db)
 		}
 
-		mux = setupServerWithRepos(cfg, log, r)
+		mux, alerter = setupServerWithRepos(cfg, log, r)
 	} else {
 		log.Info("using in-memory storage (local mode)")
 		r = setupInMemoryRepos()
-		mux = setupServerWithRepos(cfg, log, r)
+		mux, alerter = setupServerWithRepos(cfg, log, r)
 	}
+	defer alerter.Stop()
 
 	// Start background cleanup service (token cleanup + key rotation)
 	keyGen := adaptcrypto.NewKeyGenerator()
@@ -650,6 +693,22 @@ func run() error {
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
 	defer cleanupCancel()
 	go cleanupSvc.Start(cleanupCtx)
+
+	// Session expiry cleanup runs on its own short interval — PostgreSQL has no native TTL.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-cleanupCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := r.session.DeleteExpired(cleanupCtx); err != nil {
+					log.Error("session cleanup failed", "error", err)
+				}
+			}
+		}
+	}()
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),

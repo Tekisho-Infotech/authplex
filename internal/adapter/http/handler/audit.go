@@ -51,10 +51,10 @@ func (h *AuditHandler) HandleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{ //nolint:errcheck
 		"events": events,
 		"count":  len(events),
 		"offset": offset,
 		"limit":  limit,
-	}) //nolint:errcheck
+	})
 }

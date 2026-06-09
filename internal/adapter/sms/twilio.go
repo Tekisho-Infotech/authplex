@@ -53,13 +53,13 @@ func (s *TwilioSender) SendOTP(ctx context.Context, phone, code string) error {
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Twilio request failed: %w", err)
+		return fmt.Errorf("twilio request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Twilio error (status %d): %s", resp.StatusCode, string(respBody))
+		return fmt.Errorf("twilio error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil

@@ -15,6 +15,21 @@ import (
 	"github.com/authplex/pkg/sdk/httputil"
 )
 
+// adminJWTPayload is the JWT claims payload for admin tokens.
+// It is kept separate from token.Claims to avoid mixing admin-specific fields
+// (TenantIDs) into the shared domain token type.
+type adminJWTPayload struct {
+	Issuer    string   `json:"iss"`
+	Subject   string   `json:"sub"`
+	Audience  []string `json:"aud"`
+	ExpiresAt int64    `json:"exp"`
+	IssuedAt  int64    `json:"iat"`
+	JWTID     string   `json:"jti"`
+	Roles     []string `json:"roles,omitempty"`
+	Email     string   `json:"email,omitempty"`
+	TenantIDs []string `json:"tenant_ids,omitempty"`
+}
+
 // AdminHandler serves the admin user management API.
 type AdminHandler struct {
 	svc      *adminsvc.Service
@@ -149,7 +164,9 @@ func (h *AdminHandler) signAdminJWT(r *http.Request, adminUser *admin.AdminUser)
 		return "", apperrors.Wrap(apperrors.ErrInternal, "failed to generate token ID", err)
 	}
 
-	claims := token.Claims{
+	// Admin JWT uses a local struct (not token.Claims) to carry TenantIDs without
+	// polluting the shared domain type with admin-specific claims.
+	claims := adminJWTPayload{
 		Issuer:    h.issuer,
 		Subject:   adminUser.ID,
 		Audience:  []string{"authplex-admin"},
@@ -158,9 +175,10 @@ func (h *AdminHandler) signAdminJWT(r *http.Request, adminUser *admin.AdminUser)
 		JWTID:     jti,
 		Roles:     []string{string(adminUser.Role)},
 		Email:     adminUser.Email,
+		TenantIDs: adminUser.TenantIDs,
 	}
 
-	signed, signErr := h.signer.Sign(claims, kp.ID, kp.PrivateKey, kp.Algorithm)
+	signed, signErr := h.signer.SignRaw(claims, kp.ID, kp.PrivateKey, kp.Algorithm)
 	if signErr != nil {
 		return "", apperrors.Wrap(apperrors.ErrInternal, "failed to sign admin token", signErr)
 	}

@@ -15,8 +15,9 @@ type Config struct {
 	DatabaseDriver database.Driver    `env:"AUTHPLEX_DATABASE_DRIVER" envDefault:"postgres"`
 	RedisURL       string             `env:"AUTHPLEX_REDIS_URL"       envDefault:"redis://localhost:6379"`
 	LogLevel       string             `env:"AUTHPLEX_LOG_LEVEL"       envDefault:""`
-	TenantMode     TenantMode         `env:"AUTHPLEX_TENANT_MODE"     envDefault:"header"`
-	Issuer         string             `env:"AUTHPLEX_ISSUER"          envDefault:"http://localhost:8080"`
+	TenantMode       TenantMode         `env:"AUTHPLEX_TENANT_MODE"        envDefault:"header"`
+	Issuer           string             `env:"AUTHPLEX_ISSUER"             envDefault:"http://localhost:8080"`
+	DefaultTenantID  string             `env:"AUTHPLEX_DEFAULT_TENANT_ID"  envDefault:""`
 	CORSOrigins    string             `env:"AUTHPLEX_CORS_ORIGINS"    envDefault:"*"`
 	AdminAPIKey    string             `env:"AUTHPLEX_ADMIN_API_KEY"   envDefault:""`
 	SMTPHost       string             `env:"AUTHPLEX_SMTP_HOST"       envDefault:""`
@@ -28,6 +29,7 @@ type Config struct {
 	SMSAccountID   string             `env:"AUTHPLEX_SMS_ACCOUNT_ID"  envDefault:""`
 	SMSAuthToken   string             `env:"AUTHPLEX_SMS_AUTH_TOKEN"  envDefault:""`
 	SMSFromNumber  string             `env:"AUTHPLEX_SMS_FROM_NUMBER" envDefault:""`
+	EnforceHTTPS     bool               `env:"AUTHPLEX_ENFORCE_HTTPS"     envDefault:"false"`
 	EncryptionKey    string             `env:"AUTHPLEX_ENCRYPTION_KEY"    envDefault:""`
 	KeyRotationDays  int                `env:"AUTHPLEX_KEY_ROTATION_DAYS" envDefault:"90"`
 	WebAuthnRPID      string            `env:"AUTHPLEX_WEBAUTHN_RP_ID"      envDefault:"localhost"`
@@ -78,6 +80,10 @@ func (c *Config) validate() *sdkerrors.AppError {
 		// valid
 	default:
 		return sdkerrors.New(sdkerrors.ErrBadRequest, "database driver must be 'postgres' or 'sqlserver'")
+	}
+
+	if c.Environment != logger.Local && c.AdminAPIKey == "" {
+		return sdkerrors.New(sdkerrors.ErrBadRequest, "AUTHPLEX_ADMIN_API_KEY must be set in staging and production environments")
 	}
 
 	return nil

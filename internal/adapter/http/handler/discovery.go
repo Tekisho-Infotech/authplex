@@ -30,7 +30,7 @@ func (h *DiscoveryHandler) HandleDiscovery(w http.ResponseWriter, r *http.Reques
 	// or from the X-Tenant-Issuer header.
 	tenantIssuer := r.Header.Get("X-Tenant-Issuer")
 	if tenantIssuer == "" {
-		if _, ok := shared.TenantFromContext(r.Context()); ok {
+		if _, ok := shared.TenantFromContext(r.Context()); ok { //nolint:staticcheck
 			// Tenant resolved by middleware; issuer will be overridden per-tenant
 			// once tenant service provides issuer lookup.
 		}

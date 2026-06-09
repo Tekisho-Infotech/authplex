@@ -33,10 +33,7 @@ func NewService(roleRepo domainrbac.RoleRepository, assignRepo domainrbac.Assign
 
 // CreateRole creates a new role.
 func (s *Service) CreateRole(ctx context.Context, req CreateRoleRequest) (RoleResponse, *apperrors.AppError) {
-	id, err := generateID()
-	if err != nil {
-		return RoleResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate ID", err)
-	}
+	id := generateID()
 
 	role, valErr := domainrbac.NewRole(id, req.TenantID, req.Name, req.Description, req.Permissions)
 	if valErr != nil {
@@ -153,6 +150,6 @@ func (s *Service) GetUserPermissions(ctx context.Context, userID, tenantID strin
 	return domainrbac.FlattenPermissions(roles), nil
 }
 
-func generateID() (string, error) {
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }

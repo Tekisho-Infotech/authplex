@@ -101,7 +101,7 @@ func NewConnection(ctx context.Context, driver Driver, dsn string, opts ...ConnO
 	db.SetConnMaxIdleTime(cfg.connMaxIdleTime)
 
 	if pingErr := db.PingContext(ctx); pingErr != nil {
-		db.Close()
+		db.Close() //nolint:errcheck
 		return sdkerrors.Err[*sql.DB](
 			sdkerrors.Wrap(sdkerrors.ErrInternal, "failed to ping database", pingErr),
 		)

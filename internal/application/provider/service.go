@@ -32,10 +32,7 @@ func NewService(repo identity.ProviderRepository, logger *slog.Logger) *Service 
 
 // Create registers a new identity provider for a tenant.
 func (s *Service) Create(ctx context.Context, req CreateProviderRequest) (ProviderResponse, *apperrors.AppError) {
-	id, err := generateID()
-	if err != nil {
-		return ProviderResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate provider ID", err)
-	}
+	id := generateID()
 
 	p, valErr := identity.NewIdentityProvider(id, req.TenantID,
 		identity.ProviderType(req.ProviderType), req.ClientID, []byte(req.ClientSecret), req.Scopes)
@@ -96,6 +93,6 @@ func (s *Service) Delete(ctx context.Context, id, tenantID string) *apperrors.Ap
 	return nil
 }
 
-func generateID() (string, error) {
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }

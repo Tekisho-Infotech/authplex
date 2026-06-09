@@ -17,13 +17,13 @@ const (
 
 // GenerateTOTP generates a TOTP code for the given secret and time (RFC 6238).
 func GenerateTOTP(secret []byte, t time.Time) string {
-	counter := uint64(t.Unix()) / totpPeriod
+	counter := uint64(t.Unix()) / totpPeriod //nolint:gosec
 	return generateHOTP(secret, counter)
 }
 
 // VerifyTOTP validates a TOTP code against the secret, accepting a time window.
 func VerifyTOTP(secret []byte, code string, t time.Time) bool {
-	counter := uint64(t.Unix()) / totpPeriod
+	counter := uint64(t.Unix()) / totpPeriod //nolint:gosec
 
 	for i := -totpWindow; i <= totpWindow; i++ {
 		c := counter + uint64(i)

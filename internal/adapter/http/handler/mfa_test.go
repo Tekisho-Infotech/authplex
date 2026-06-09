@@ -106,8 +106,13 @@ func (m *mockMFACodeRepo) Consume(_ context.Context, _ string) (token.Authorizat
 }
 
 type mockMFASigner struct{}
+
 func (m *mockMFASigner) Sign(_ token.Claims, _ string, _ []byte, _ string) (string, error) {
 	return "mock-jwt", nil
+}
+
+func (m *mockMFASigner) SignRaw(_ any, _ string, _ []byte, _ string) (string, error) {
+	return "mock-raw-jwt", nil
 }
 
 func newMFATestService() *mfasvc.Service {

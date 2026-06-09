@@ -50,9 +50,9 @@ func (h *ClientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, appErr) //nolint:errcheck
 			return
 		}
-		httputil.WriteJSON(w, http.StatusOK, map[string]any{
+		httputil.WriteJSON(w, http.StatusOK, map[string]any{ //nolint:errcheck
 			"clients": clients, "total": total, "offset": offset, "limit": limit,
-		}) //nolint:errcheck
+		})
 
 	default:
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

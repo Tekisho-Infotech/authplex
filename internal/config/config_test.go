@@ -3,6 +3,7 @@ package config
 import (
 	"testing"
 
+	"github.com/authplex/pkg/sdk/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,6 +71,7 @@ func TestConfig_Validate_ValidHeader(t *testing.T) {
 		HTTPPort:       8080,
 		TenantMode:     TenantModeHeader,
 		DatabaseDriver: "postgres",
+		Environment:    logger.Local,
 	}
 
 	err := cfg.validate()
@@ -81,6 +83,61 @@ func TestConfig_Validate_ValidDomain(t *testing.T) {
 		HTTPPort:       8080,
 		TenantMode:     TenantModeDomain,
 		DatabaseDriver: "sqlserver",
+		Environment:    logger.Local,
+	}
+
+	err := cfg.validate()
+	assert.Nil(t, err)
+}
+
+func TestConfig_Validate_ProductionRequiresAdminKey(t *testing.T) {
+	cfg := &Config{
+		HTTPPort:       8080,
+		TenantMode:     TenantModeHeader,
+		DatabaseDriver: "postgres",
+		Environment:    logger.Production,
+		AdminAPIKey:    "",
+	}
+
+	err := cfg.validate()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Message, "AUTHPLEX_ADMIN_API_KEY")
+}
+
+func TestConfig_Validate_StagingRequiresAdminKey(t *testing.T) {
+	cfg := &Config{
+		HTTPPort:       8080,
+		TenantMode:     TenantModeHeader,
+		DatabaseDriver: "postgres",
+		Environment:    logger.Staging,
+		AdminAPIKey:    "",
+	}
+
+	err := cfg.validate()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Message, "AUTHPLEX_ADMIN_API_KEY")
+}
+
+func TestConfig_Validate_ProductionWithAdminKey(t *testing.T) {
+	cfg := &Config{
+		HTTPPort:       8080,
+		TenantMode:     TenantModeHeader,
+		DatabaseDriver: "postgres",
+		Environment:    logger.Production,
+		AdminAPIKey:    "my-prod-key",
+	}
+
+	err := cfg.validate()
+	assert.Nil(t, err)
+}
+
+func TestConfig_Validate_LocalAllowsEmptyAdminKey(t *testing.T) {
+	cfg := &Config{
+		HTTPPort:       8080,
+		TenantMode:     TenantModeHeader,
+		DatabaseDriver: "postgres",
+		Environment:    logger.Local,
+		AdminAPIKey:    "",
 	}
 
 	err := cfg.validate()

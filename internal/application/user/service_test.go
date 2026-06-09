@@ -115,7 +115,7 @@ func (m *mockSessionRepo) Create(_ context.Context, s domainuser.Session) error 
 
 func (m *mockSessionRepo) GetByID(_ context.Context, id string) (domainuser.Session, error) {
 	s, ok := m.sessions[id]
-	if !ok {
+	if !ok || s.ExpiresAt.Before(time.Now().UTC()) {
 		return domainuser.Session{}, errors.New("not found")
 	}
 	return s, nil
@@ -126,7 +126,7 @@ func (m *mockSessionRepo) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (m *mockSessionRepo) DeleteByUserID(_ context.Context, userID string) error {
+func (m *mockSessionRepo) DeleteByUserID(_ context.Context, userID, _ string) error {
 	for id, s := range m.sessions {
 		if s.UserID == userID {
 			delete(m.sessions, id)
@@ -134,6 +134,8 @@ func (m *mockSessionRepo) DeleteByUserID(_ context.Context, userID string) error
 	}
 	return nil
 }
+
+func (m *mockSessionRepo) DeleteExpired(_ context.Context) (int64, error) { return 0, nil }
 
 type mockHasher struct{}
 
@@ -771,4 +773,102 @@ func TestResetPassword_PhoneUser(t *testing.T) {
 	})
 
 	require.NotNil(t, appErr) // no user with that phone in default test setup
+}
+
+// errSessionRepo is a session repo whose DeleteByUserID always returns an error.
+type errSessionRepo struct {
+	*mockSessionRepo
+}
+
+func (e *errSessionRepo) DeleteByUserID(_ context.Context, _, _ string) error {
+	return errors.New("session store unavailable")
+}
+
+func TestPurgeUser_Success(t *testing.T) {
+	repo := newMockUserRepo()
+	u, _ := domainuser.NewUser("u1", "t1", "purge@example.com", "Purge Me")
+	repo.users["u1"] = u
+
+	sessionRepo := newMockSessionRepo()
+	sessionRepo.sessions["s1"] = domainuser.Session{ID: "s1", UserID: "u1", TenantID: "t1", ExpiresAt: time.Now().UTC().Add(time.Hour)}
+
+	svc := NewService(repo, sessionRepo, &mockHasher{}, slog.Default())
+	appErr := svc.PurgeUser(context.Background(), "u1", "t1")
+
+	require.Nil(t, appErr)
+	// Sessions for the user should have been cleared
+	assert.Empty(t, sessionRepo.sessions)
+}
+
+func TestPurgeUser_EmptyUserID(t *testing.T) {
+	svc := NewService(newMockUserRepo(), newMockSessionRepo(), &mockHasher{}, slog.Default())
+	appErr := svc.PurgeUser(context.Background(), "", "t1")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrBadRequest, appErr.Code)
+}
+
+func TestPurgeUser_EmptyTenantID(t *testing.T) {
+	svc := NewService(newMockUserRepo(), newMockSessionRepo(), &mockHasher{}, slog.Default())
+	appErr := svc.PurgeUser(context.Background(), "u1", "")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrBadRequest, appErr.Code)
+}
+
+func TestPurgeUser_SessionDeletionFails(t *testing.T) {
+	svc := NewService(newMockUserRepo(), &errSessionRepo{newMockSessionRepo()}, &mockHasher{}, slog.Default())
+	appErr := svc.PurgeUser(context.Background(), "u1", "t1")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrInternal, appErr.Code)
+}
+
+func TestPurgeUser_HardDeleteFails(t *testing.T) {
+	repo := newMockUserRepo()
+	failRepo := &failHardDeleteRepo{mockUserRepo: repo}
+	svc := NewService(failRepo, newMockSessionRepo(), &mockHasher{}, slog.Default())
+	appErr := svc.PurgeUser(context.Background(), "u1", "t1")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrInternal, appErr.Code)
+}
+
+type failHardDeleteRepo struct {
+	*mockUserRepo
+}
+
+func (f *failHardDeleteRepo) HardDelete(_ context.Context, _, _ string) error {
+	return errors.New("db error")
+}
+
+func TestExportUserData_Success(t *testing.T) {
+	repo := newMockUserRepo()
+	u, _ := domainuser.NewUser("u1", "t1", "export@example.com", "Export User")
+	repo.users["u1"] = u
+
+	svc := NewService(repo, newMockSessionRepo(), &mockHasher{}, slog.Default())
+	resp, appErr := svc.ExportUserData(context.Background(), "u1", "t1")
+
+	require.Nil(t, appErr)
+	assert.Equal(t, "u1", resp.ID)
+	assert.Equal(t, "t1", resp.TenantID)
+	assert.Equal(t, "export@example.com", resp.Email)
+}
+
+func TestExportUserData_EmptyUserID(t *testing.T) {
+	svc := NewService(newMockUserRepo(), newMockSessionRepo(), &mockHasher{}, slog.Default())
+	_, appErr := svc.ExportUserData(context.Background(), "", "t1")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrBadRequest, appErr.Code)
+}
+
+func TestExportUserData_EmptyTenantID(t *testing.T) {
+	svc := NewService(newMockUserRepo(), newMockSessionRepo(), &mockHasher{}, slog.Default())
+	_, appErr := svc.ExportUserData(context.Background(), "u1", "")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrBadRequest, appErr.Code)
+}
+
+func TestExportUserData_UserNotFound(t *testing.T) {
+	svc := NewService(newMockUserRepo(), newMockSessionRepo(), &mockHasher{}, slog.Default())
+	_, appErr := svc.ExportUserData(context.Background(), "nonexistent", "t1")
+	require.NotNil(t, appErr)
+	assert.Equal(t, apperrors.ErrNotFound, appErr.Code)
 }

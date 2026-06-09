@@ -104,7 +104,7 @@ func (r *AuditRepository) Query(ctx context.Context, filter audit.QueryFilter) (
 	argIdx++
 
 	if filter.Offset > 0 {
-		query += ` OFFSET $` + itoa(argIdx)
+		query += ` OFFSET $` + itoa(argIdx) //nolint:gosec
 		args = append(args, filter.Offset)
 	}
 
@@ -152,7 +152,7 @@ func (r *AuditRepository) Query(ctx context.Context, filter audit.QueryFilter) (
 // itoa converts an int to its string representation (simple helper to avoid strconv import).
 func itoa(n int) string {
 	if n < 10 {
-		return string(rune('0' + n))
+		return string(rune('0' + n)) //nolint:gosec
 	}
-	return string(rune('0'+n/10)) + string(rune('0'+n%10))
+	return string(rune('0'+n/10)) + string(rune('0'+n%10)) //nolint:gosec
 }

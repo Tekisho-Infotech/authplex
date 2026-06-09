@@ -99,13 +99,16 @@ func (m *mockUserSessionRepo) Delete(_ context.Context, id string) error {
 	delete(m.sessions, id)
 	return nil
 }
-func (m *mockUserSessionRepo) DeleteByUserID(_ context.Context, userID string) error {
+func (m *mockUserSessionRepo) DeleteByUserID(_ context.Context, userID, _ string) error {
 	for id, s := range m.sessions {
 		if s.UserID == userID {
 			delete(m.sessions, id)
 		}
 	}
 	return nil
+}
+
+func (m *mockUserSessionRepo) DeleteExpired(_ context.Context) (int64, error) { return 0, nil
 }
 
 type mockUserHasher struct{}

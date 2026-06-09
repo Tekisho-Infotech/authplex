@@ -81,10 +81,10 @@ func (h *MFAHandler) HandleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, map[string]string{
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{ //nolint:errcheck
 		"code":  resp.Code,
 		"state": resp.State,
-	}) //nolint:errcheck
+	})
 }
 
 // HandleWebAuthnRegisterBegin serves POST /mfa/webauthn/register/begin.

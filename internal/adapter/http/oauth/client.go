@@ -60,7 +60,7 @@ func (c *HTTPOAuthClient) ExchangeCode(ctx context.Context, tokenURL, code, redi
 	if err != nil {
 		return identity.OAuthTokenResponse{}, fmt.Errorf("token exchange request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -104,7 +104,7 @@ func (c *HTTPOAuthClient) FetchUserInfo(ctx context.Context, userInfoURL, access
 	if err != nil {
 		return identity.UserInfo{}, fmt.Errorf("userinfo request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -141,7 +141,7 @@ func (c *HTTPOAuthClient) FetchOIDCDiscovery(ctx context.Context, discoveryURL s
 	if err != nil {
 		return identity.OIDCConfig{}, fmt.Errorf("discovery request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var config identity.OIDCConfig
 	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
@@ -226,7 +226,7 @@ func (c *HTTPOAuthClient) verifyJWTSignature(ctx context.Context, parts []string
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var jwks struct {
 		Keys []json.RawMessage `json:"keys"`

@@ -95,10 +95,7 @@ func (s *Service) EnrollTOTP(ctx context.Context, req EnrollRequest) (EnrollResp
 		return EnrollResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate secret", err)
 	}
 
-	id, err := generateID()
-	if err != nil {
-		return EnrollResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate ID", err)
-	}
+	id := generateID()
 
 	enrollment := domainmfa.TOTPEnrollment{
 		ID:        id,
@@ -217,10 +214,7 @@ func (s *Service) VerifyMFA(ctx context.Context, req MFAVerifyRequest) (auth.Aut
 
 // CreateChallenge creates an MFA challenge for the authorize flow.
 func (s *Service) CreateChallenge(ctx context.Context, req CreateChallengeRequest) (ChallengeResponse, *apperrors.AppError) {
-	id, err := generateID()
-	if err != nil {
-		return ChallengeResponse{}, apperrors.Wrap(apperrors.ErrInternal, "failed to generate challenge ID", err)
-	}
+	id := generateID()
 
 	challenge := domainmfa.MFAChallenge{
 		ID:                  id,
@@ -289,7 +283,7 @@ func (s *Service) newWebAuthn() (*webauthn.WebAuthn, *apperrors.AppError) {
 }
 
 // buildWebAuthnUser constructs a webauthn.User adapter from stored credentials.
-func (s *Service) buildWebAuthnUser(ctx context.Context, tenantID, subject, displayName string) (*webauthnUser, *apperrors.AppError) {
+func (s *Service) buildWebAuthnUser(ctx context.Context, tenantID, subject, displayName string) (*webauthnUser, *apperrors.AppError) { //nolint:unparam
 	stored, err := s.webauthnRepo.GetBySubject(ctx, tenantID, subject)
 	if err != nil {
 		// No credentials yet — that's fine for registration.
@@ -347,10 +341,7 @@ func (s *Service) BeginWebAuthnRegistration(ctx context.Context, req WebAuthnReg
 	}
 
 	// Store the session data in the challenge repo for later retrieval.
-	sessionID, idErr := generateID()
-	if idErr != nil {
-		return nil, apperrors.Wrap(apperrors.ErrInternal, "failed to generate session ID", idErr)
-	}
+	sessionID := generateID()
 
 	sessionEnvelope := webauthnSessionData{
 		Session:  session,
@@ -453,10 +444,7 @@ func (s *Service) FinishWebAuthnRegistration(ctx context.Context, req WebAuthnRe
 	}
 
 	// Store the credential.
-	credID, idErr := generateID()
-	if idErr != nil {
-		return apperrors.Wrap(apperrors.ErrInternal, "failed to generate credential ID", idErr)
-	}
+	credID := generateID()
 
 	storedCred := domainmfa.WebAuthnCredential{
 		ID:              credID,
@@ -510,10 +498,7 @@ func (s *Service) BeginWebAuthnLogin(ctx context.Context, req WebAuthnLoginReque
 		return nil, apperrors.Wrap(apperrors.ErrInternal, "failed to begin WebAuthn login", err)
 	}
 
-	sessionID, idErr := generateID()
-	if idErr != nil {
-		return nil, apperrors.Wrap(apperrors.ErrInternal, "failed to generate session ID", idErr)
-	}
+	sessionID := generateID()
 
 	sessionEnvelope := webauthnSessionData{
 		Session:  session,
@@ -655,6 +640,6 @@ func (s *Service) VerifyMFAWebAuthn(ctx context.Context, challenge domainmfa.MFA
 	return nil
 }
 
-func generateID() (string, error) {
-	return uuid.New().String(), nil
+func generateID() string {
+	return uuid.New().String()
 }

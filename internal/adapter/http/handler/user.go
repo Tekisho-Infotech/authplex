@@ -211,12 +211,60 @@ func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{ //nolint:errcheck
 		"users":  users,
 		"count":  total,
 		"offset": offset,
 		"limit":  limit,
 	}) //nolint:errcheck
+}
+
+// HandlePurgeUser serves DELETE /tenants/{tid}/users/{uid}/purge (GDPR Art. 17 — right to erasure).
+func (h *UserHandler) HandlePurgeUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
+		return
+	}
+
+	tenantID := extractPathSegment(r.URL.Path, "tenants", 1)
+	userID := extractPathSegment(r.URL.Path, "users", 1)
+
+	if tenantID == "" || userID == "" {
+		httputil.WriteError(w, sdkerrors.New(sdkerrors.ErrBadRequest, "tenant_id and user_id are required")) //nolint:errcheck
+		return
+	}
+
+	if appErr := h.svc.PurgeUser(r.Context(), userID, tenantID); appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "purged"}) //nolint:errcheck
+}
+
+// HandleExportUser serves GET /tenants/{tid}/users/{uid}/export (GDPR Art. 15/20 — right to access/portability).
+func (h *UserHandler) HandleExportUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
+		return
+	}
+
+	tenantID := extractPathSegment(r.URL.Path, "tenants", 1)
+	userID := extractPathSegment(r.URL.Path, "users", 1)
+
+	if tenantID == "" || userID == "" {
+		httputil.WriteError(w, sdkerrors.New(sdkerrors.ErrBadRequest, "tenant_id and user_id are required")) //nolint:errcheck
+		return
+	}
+
+	data, appErr := h.svc.ExportUserData(r.Context(), userID, tenantID)
+	if appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+
+	w.Header().Set("Content-Disposition", "attachment; filename=\"user-export.json\"")
+	httputil.WriteJSON(w, http.StatusOK, data) //nolint:errcheck
 }
 
 // extractSessionToken gets the session token from Authorization header or X-Session-Token.

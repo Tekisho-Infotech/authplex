@@ -183,3 +183,66 @@ func TestJWTSigner_ES256_WithRSAKey_Fails(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "EC private key")
 }
+
+func TestJWTSigner_SignRaw_RS256(t *testing.T) {
+	gen := NewKeyGenerator()
+	signer := NewJWTSigner()
+
+	privPEM, pubPEM, err := gen.GenerateRSA()
+	require.NoError(t, err)
+
+	type customPayload struct {
+		Issuer    string   `json:"iss"`
+		Subject   string   `json:"sub"`
+		TenantIDs []string `json:"tenant_ids"`
+	}
+	payload := customPayload{
+		Issuer:    "https://auth.example.com",
+		Subject:   "admin-1",
+		TenantIDs: []string{"t1", "t2"},
+	}
+
+	jwt, err := signer.SignRaw(payload, "kid-1", privPEM, "RS256")
+	require.NoError(t, err)
+
+	parts := strings.Split(jwt, ".")
+	require.Len(t, parts, 3)
+
+	// Verify signature
+	h := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	require.NoError(t, err)
+
+	pubBlock, _ := pem.Decode(pubPEM)
+	pub, err := x509.ParsePKIXPublicKey(pubBlock.Bytes)
+	require.NoError(t, err)
+
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	require.True(t, ok)
+	require.NoError(t, rsa.VerifyPKCS1v15(rsaPub, crypto.SHA256, h[:], sig))
+
+	// Verify payload contains custom field
+	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(payloadJSON, &decoded))
+	ids, ok := decoded["tenant_ids"].([]any)
+	require.True(t, ok)
+	assert.Len(t, ids, 2)
+}
+
+func TestJWTSigner_SignRaw_InvalidKey(t *testing.T) {
+	signer := NewJWTSigner()
+	_, err := signer.SignRaw(map[string]string{"sub": "test"}, "kid", []byte("not-pem"), "RS256")
+	require.Error(t, err)
+}
+
+func TestJWTSigner_SignRaw_UnmarshalablePayload(t *testing.T) {
+	gen := NewKeyGenerator()
+	signer := NewJWTSigner()
+	privPEM, _, err := gen.GenerateRSA()
+	require.NoError(t, err)
+	// chan cannot be JSON-marshaled
+	_, err = signer.SignRaw(make(chan int), "kid", privPEM, "RS256")
+	require.Error(t, err)
+}

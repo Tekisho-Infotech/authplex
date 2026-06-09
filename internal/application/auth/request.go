@@ -56,6 +56,9 @@ type IntrospectRequest struct {
 	ClientID      string
 	ClientSecret  string
 	TenantID      string
+	DPoPProof     string // RFC 9449: DPoP proof JWT from the DPoP header
+	HTTPMethod    string // RFC 9449: HTTP method of the introspection request (for htm check)
+	HTTPURI       string // RFC 9449: HTTP URI of the introspection request (for htu check)
 }
 
 // IntrospectResponse is the RFC 7662 introspection response.

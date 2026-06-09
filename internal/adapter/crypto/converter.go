@@ -56,7 +56,7 @@ func rsaToJWK(key *rsa.PublicKey, kid string, alg string) jwk.PublicJWK {
 }
 
 func ecToJWK(key *ecdsa.PublicKey, kid string, alg string) (jwk.PublicJWK, error) {
-	params := key.Curve.Params()
+	params := key.Params()
 	byteLen := (params.BitSize + 7) / 8
 
 	xBytes := padLeft(key.X.Bytes(), byteLen)

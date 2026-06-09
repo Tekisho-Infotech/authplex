@@ -108,8 +108,13 @@ func (m *mockCodeRepo) Consume(_ context.Context, _ string) (token.Authorization
 }
 
 type mockSigner struct{}
+
 func (m *mockSigner) Sign(_ token.Claims, _ string, _ []byte, _ string) (string, error) {
 	return "mock-jwt", nil
+}
+
+func (m *mockSigner) SignRaw(_ any, _ string, _ []byte, _ string) (string, error) {
+	return "mock-raw-jwt", nil
 }
 
 func newTestAuthSvc() *auth.Service {

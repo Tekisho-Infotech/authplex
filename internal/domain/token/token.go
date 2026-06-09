@@ -1,5 +1,11 @@
 package token
 
+// CNFClaim is the confirmation claim (RFC 7800) used for DPoP token binding (RFC 9449).
+// JKT is the JWK Thumbprint of the client's public key.
+type CNFClaim struct {
+	JKT string `json:"jkt,omitempty"`
+}
+
 // Claims represents the JWT claims payload (RFC 7519 + OIDC Core 1.0).
 type Claims struct {
 	Issuer    string   `json:"iss"`
@@ -28,6 +34,9 @@ type Claims struct {
 
 	// Allowed API endpoints for agent tokens
 	Endpoints []string `json:"endpoints,omitempty"`
+
+	// DPoP token binding (RFC 9449) — populated when token was issued with a DPoP key
+	CNF *CNFClaim `json:"cnf,omitempty"`
 }
 
 // TokenResponse is the OAuth 2.0 token response (RFC 6749 Section 5.1).
