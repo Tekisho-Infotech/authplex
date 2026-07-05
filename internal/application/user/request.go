@@ -93,6 +93,7 @@ type UpdateUserRequest struct {
 	UserID   string `json:"-"`
 	TenantID string `json:"-"`
 	Name     string `json:"name"`
+	Phone    string `json:"phone"`
 	Enabled  bool   `json:"enabled"`
 }
 

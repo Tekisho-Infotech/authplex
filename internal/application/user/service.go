@@ -477,6 +477,7 @@ func (s *Service) UpdateUser(ctx context.Context, req UpdateUserRequest) (UserSu
 	if req.Name != "" {
 		u.Name = req.Name
 	}
+	u.Phone = req.Phone
 	u.Enabled = req.Enabled
 	if updateErr := s.userRepo.Update(ctx, u); updateErr != nil {
 		return UserSummary{}, apperrors.Wrap(apperrors.ErrInternal, "failed to update user", updateErr)
