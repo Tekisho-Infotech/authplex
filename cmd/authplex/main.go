@@ -434,6 +434,12 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) (http.Ha
 			userHandler.HandlePurgeUser(w, r)
 			return
 		}
+		if strings.Contains(r.URL.Path, "/users/") && r.Method == http.MethodPut &&
+			!strings.HasSuffix(r.URL.Path, "/roles") && !strings.HasSuffix(r.URL.Path, "/export") &&
+			!strings.HasSuffix(r.URL.Path, "/purge") && !strings.Contains(r.URL.Path, "/permissions") {
+			userHandler.HandleUpdateUser(w, r)
+			return
+		}
 		if strings.Contains(r.URL.Path, "/users/") && strings.HasSuffix(r.URL.Path, "/export") {
 			userHandler.HandleExportUser(w, r)
 			return

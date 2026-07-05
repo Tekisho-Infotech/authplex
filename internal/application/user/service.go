@@ -465,6 +465,33 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest) *
 	return nil
 }
 
+// UpdateUser updates mutable profile fields (name, enabled) for a user.
+func (s *Service) UpdateUser(ctx context.Context, req UpdateUserRequest) (UserSummary, *apperrors.AppError) {
+	if req.UserID == "" || req.TenantID == "" {
+		return UserSummary{}, apperrors.New(apperrors.ErrBadRequest, "user_id and tenant_id are required")
+	}
+	u, err := s.userRepo.GetByID(ctx, req.UserID, req.TenantID)
+	if err != nil {
+		return UserSummary{}, apperrors.New(apperrors.ErrNotFound, "user not found")
+	}
+	if req.Name != "" {
+		u.Name = req.Name
+	}
+	u.Enabled = req.Enabled
+	if updateErr := s.userRepo.Update(ctx, u); updateErr != nil {
+		return UserSummary{}, apperrors.Wrap(apperrors.ErrInternal, "failed to update user", updateErr)
+	}
+	return UserSummary{
+		ID:            u.ID,
+		Email:         u.Email,
+		Name:          u.Name,
+		Phone:         u.Phone,
+		EmailVerified: u.EmailVerified,
+		Enabled:       u.Enabled,
+		CreatedAt:     u.CreatedAt,
+	}, nil
+}
+
 // ListUsers returns a paginated list of users for a tenant.
 func (s *Service) ListUsers(ctx context.Context, tenantID string, offset, limit int) ([]UserSummary, int, *apperrors.AppError) {
 	if tenantID == "" {

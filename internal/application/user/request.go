@@ -88,6 +88,14 @@ type UserSummary struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// UpdateUserRequest is the DTO for updating a user's profile fields.
+type UpdateUserRequest struct {
+	UserID   string `json:"-"`
+	TenantID string `json:"-"`
+	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
+}
+
 // UserExportResponse contains all personal data held for a user (GDPR Art. 15/20).
 type UserExportResponse struct {
 	ID               string     `json:"id"`

@@ -219,6 +219,38 @@ func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 	}) //nolint:errcheck
 }
 
+// HandleUpdateUser serves PUT /tenants/{tid}/users/{uid}.
+func (h *UserHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
+		return
+	}
+
+	tenantID := extractPathSegment(r.URL.Path, "tenants", 1)
+	userID := extractPathSegment(r.URL.Path, "users", 1)
+
+	if tenantID == "" || userID == "" {
+		httputil.WriteError(w, sdkerrors.New(sdkerrors.ErrBadRequest, "tenant_id and user_id are required")) //nolint:errcheck
+		return
+	}
+
+	var req usersvc.UpdateUserRequest
+	if appErr := httputil.DecodeJSON(r, &req); appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+	req.UserID = userID
+	req.TenantID = tenantID
+
+	updated, appErr := h.svc.UpdateUser(r.Context(), req)
+	if appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, updated) //nolint:errcheck
+}
+
 // HandlePurgeUser serves DELETE /tenants/{tid}/users/{uid}/purge (GDPR Art. 17 — right to erasure).
 func (h *UserHandler) HandlePurgeUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
