@@ -19,6 +19,17 @@ func NewSocialHandler(svc *social.Service) *SocialHandler {
 }
 
 // HandleCallback serves GET /callback from external providers.
+//
+// @Summary      Social login callback
+// @Description  OAuth provider callback. Handles the authorization code exchange for social login providers (Google, Apple, GitHub, etc.). The `state` param encodes the tenant and original redirect URI.
+// @Tags         social
+// @Param        code              query  string  false  "Authorization code from provider"
+// @Param        state             query  string  false  "State (contains tenant context)"
+// @Param        error             query  string  false  "Error code from provider"
+// @Param        error_description query  string  false  "Error description"
+// @Success      302
+// @Failure      400  {object}  httputil.Error
+// @Router       /callback [get]
 func (h *SocialHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

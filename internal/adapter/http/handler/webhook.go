@@ -54,6 +54,19 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// createWebhook is the POST /tenants/{tid}/webhooks operation.
+//
+// @Summary      Create webhook
+// @Description  Register a new webhook endpoint that will receive event notifications for the tenant.
+// @Tags         webhooks
+// @Accept       json
+// @Produce      json
+// @Param        tid   path      string                   true  "Tenant ID"
+// @Param        body  body      map[string]interface{}  true  "Webhook details (url, events[])"
+// @Security     AdminAuth
+// @Success      201  {object}  webhook.Webhook
+// @Failure      400  {object}  httputil.Error
+// @Router       /tenants/{tid}/webhooks [post]
 func (h *WebhookHandler) createWebhook(w http.ResponseWriter, r *http.Request, tenantID string) {
 	var req struct {
 		URL    string   `json:"url"`
@@ -78,6 +91,15 @@ func (h *WebhookHandler) createWebhook(w http.ResponseWriter, r *http.Request, t
 	httputil.WriteJSON(w, http.StatusCreated, wh) //nolint:errcheck
 }
 
+// listWebhooks is the GET /tenants/{tid}/webhooks operation.
+//
+// @Summary      List webhooks
+// @Tags         webhooks
+// @Produce      json
+// @Param        tid  path  string  true  "Tenant ID"
+// @Security     AdminAuth
+// @Success      200  {object}  map[string]interface{}
+// @Router       /tenants/{tid}/webhooks [get]
 func (h *WebhookHandler) listWebhooks(w http.ResponseWriter, r *http.Request, tenantID string) {
 	hooks, err := h.svc.List(r.Context(), tenantID)
 	if err != nil {
@@ -95,6 +117,16 @@ func (h *WebhookHandler) listWebhooks(w http.ResponseWriter, r *http.Request, te
 	})
 }
 
+// deleteWebhook is the DELETE /tenants/{tid}/webhooks/{wid} operation.
+//
+// @Summary      Delete webhook
+// @Tags         webhooks
+// @Param        tid  path  string  true  "Tenant ID"
+// @Param        wid  path  string  true  "Webhook ID"
+// @Security     AdminAuth
+// @Success      204
+// @Failure      404  {object}  httputil.Error
+// @Router       /tenants/{tid}/webhooks/{wid} [delete]
 func (h *WebhookHandler) deleteWebhook(w http.ResponseWriter, r *http.Request, tenantID, webhookID string) {
 	if err := h.svc.Delete(r.Context(), webhookID, tenantID); err != nil {
 		httputil.WriteError(w, sdkerrors.New(sdkerrors.ErrInternal, err.Error())) //nolint:errcheck

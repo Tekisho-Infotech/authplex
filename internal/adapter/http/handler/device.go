@@ -18,6 +18,18 @@ func NewDeviceHandler(svc *auth.Service) *DeviceHandler {
 }
 
 // HandleDeviceAuthorize serves POST /device/authorize.
+//
+// @Summary      Device authorization
+// @Description  Initiate the OAuth 2.0 Device Authorization Grant (RFC 8628). Poll /token with grant_type=urn:ietf:params:oauth:grant-type:device_code.
+// @Tags         oidc
+// @Accept       application/x-www-form-urlencoded
+// @Produce      json
+// @Param        X-Tenant-ID  header    string  true   "Tenant identifier"
+// @Param        client_id    formData  string  true   "Client ID"
+// @Param        scope        formData  string  false  "Requested scopes"
+// @Success      200          {object}  map[string]interface{}
+// @Failure      400          {object}  httputil.Error
+// @Router       /device/authorize [post]
 func (h *DeviceHandler) HandleDeviceAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

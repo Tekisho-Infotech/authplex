@@ -18,6 +18,18 @@ func NewRevokeHandler(svc *auth.Service) *RevokeHandler {
 }
 
 // HandleRevoke serves POST /revoke.
+//
+// @Summary      Token revocation
+// @Description  Revoke an access or refresh token (RFC 7009). Always returns 200 per spec.
+// @Tags         oidc
+// @Accept       application/x-www-form-urlencoded
+// @Param        X-Tenant-ID      header    string  false  "Tenant identifier (optional)"
+// @Param        token            formData  string  true   "Token to revoke"
+// @Param        token_type_hint  formData  string  false  "Token type hint"  Enums(access_token, refresh_token)
+// @Param        client_id        formData  string  false  "Client ID"
+// @Param        client_secret    formData  string  false  "Client secret"
+// @Success      200
+// @Router       /revoke [post]
 func (h *RevokeHandler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

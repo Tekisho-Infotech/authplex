@@ -20,6 +20,22 @@ func NewAuditHandler(svc *auditsvc.Service) *AuditHandler {
 }
 
 // HandleAuditLogs serves GET /tenants/{tid}/audit.
+//
+// @Summary      Query audit logs
+// @Description  Return paginated audit events for the tenant. All parameters are optional filters.
+// @Tags         audit
+// @Produce      json
+// @Param        tid            path   string  true   "Tenant ID"
+// @Param        actor_id       query  string  false  "Filter by actor (user) ID"
+// @Param        action         query  string  false  "Filter by event type (e.g. user.login)"
+// @Param        resource_type  query  string  false  "Filter by resource type (e.g. client)"
+// @Param        resource_id    query  string  false  "Filter by resource ID"
+// @Param        limit          query  int     false  "Max results (default 50)"
+// @Param        offset         query  int     false  "Pagination offset (default 0)"
+// @Security     AdminAuth
+// @Success      200  {object}  map[string]interface{}
+// @Failure      400  {object}  httputil.Error
+// @Router       /tenants/{tid}/audit [get]
 func (h *AuditHandler) HandleAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

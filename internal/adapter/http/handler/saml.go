@@ -19,6 +19,17 @@ func NewSAMLHandler(svc *samlsvc.Service) *SAMLHandler {
 }
 
 // HandleMetadata serves GET /saml/metadata — returns SP metadata XML.
+//
+// @Summary      SAML SP metadata
+// @Description  Returns the SAML 2.0 Service Provider metadata XML document.
+// @Tags         saml
+// @Produce      xml
+// @Param        provider     query   string  true   "Provider ID"
+// @Param        X-Tenant-ID  header  string  false  "Tenant identifier"
+// @Param        tenant       query   string  false  "Tenant identifier (alternative to header)"
+// @Success      200
+// @Failure      400  {object}  httputil.Error
+// @Router       /saml/metadata [get]
 func (h *SAMLHandler) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -49,6 +60,21 @@ func (h *SAMLHandler) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleSSO serves GET /saml/sso — initiates SAML SSO by redirecting to IdP.
+//
+// @Summary      SAML SSO initiation
+// @Description  Initiates SAML 2.0 Single Sign-On. Redirects the browser to the configured Identity Provider.
+// @Tags         saml
+// @Param        X-Tenant-ID           header  string  true   "Tenant identifier"
+// @Param        provider              query   string  true   "Provider ID"
+// @Param        client_id             query   string  false  "OAuth client ID"
+// @Param        redirect_uri          query   string  false  "Post-auth redirect URI"
+// @Param        scope                 query   string  false  "Requested scopes"
+// @Param        state                 query   string  false  "Opaque state value"
+// @Param        code_challenge        query   string  false  "PKCE code challenge"
+// @Param        code_challenge_method query   string  false  "PKCE method"
+// @Success      302
+// @Failure      400  {object}  httputil.Error
+// @Router       /saml/sso [get]
 func (h *SAMLHandler) HandleSSO(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -83,6 +109,16 @@ func (h *SAMLHandler) HandleSSO(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleACS serves POST /saml/acs — receives SAML assertion from IdP.
+//
+// @Summary      SAML Assertion Consumer Service
+// @Description  Receives the SAML assertion posted by the Identity Provider after authentication.
+// @Tags         saml
+// @Accept       application/x-www-form-urlencoded
+// @Param        SAMLResponse  formData  string  true  "Base64-encoded SAML assertion"
+// @Param        RelayState    formData  string  true  "Relay state (encodes original request context)"
+// @Success      302
+// @Failure      400  {object}  httputil.Error
+// @Router       /saml/acs [post]
 func (h *SAMLHandler) HandleACS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

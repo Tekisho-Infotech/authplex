@@ -57,6 +57,25 @@ func (h *AuthorizeHandler) WithMFA(mfa *mfasvc.Service, tenant *tenantsvc.Servic
 
 // HandleAuthorize serves GET /authorize.
 // Subject resolution order: session token → X-Subject header → 401 login_required.
+//
+// @Summary      Authorization endpoint
+// @Description  Initiates an OAuth 2.0 / OIDC authorization flow. Supports authorization_code with PKCE, social login (set `provider`), and session-based auth.
+// @Tags         oidc
+// @Produce      json
+// @Param        X-Tenant-ID           header    string  true   "Tenant identifier"
+// @Param        response_type         query     string  true   "Response type"  Enums(code)
+// @Param        client_id             query     string  true   "Client ID"
+// @Param        redirect_uri          query     string  true   "Redirect URI"
+// @Param        scope                 query     string  false  "Requested scopes (e.g. openid profile email)"
+// @Param        state                 query     string  false  "Opaque state value"
+// @Param        code_challenge        query     string  false  "PKCE code challenge"
+// @Param        code_challenge_method query     string  false  "PKCE method"  Enums(S256)
+// @Param        provider              query     string  false  "Social login provider (e.g. google, apple)"
+// @Param        nonce                 query     string  false  "Nonce for ID token binding"
+// @Success      302
+// @Failure      400  {object}  httputil.Error
+// @Failure      401  {object}  httputil.Error
+// @Router       /authorize [get]
 func (h *AuthorizeHandler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

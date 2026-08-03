@@ -22,6 +22,18 @@ func NewUserHandler(svc *usersvc.Service) *UserHandler {
 }
 
 // HandleRegister serves POST /register.
+//
+// @Summary      Register user
+// @Description  Create a new user account within the resolved tenant.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        X-Tenant-ID  header    string                true   "Tenant identifier"
+// @Param        body         body      user.RegisterRequest  true   "Registration details"
+// @Success      201          {object}  user.RegisterResponse
+// @Failure      400          {object}  httputil.Error
+// @Failure      409          {object}  httputil.Error
+// @Router       /register [post]
 func (h *UserHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -45,6 +57,18 @@ func (h *UserHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleLogin serves POST /login.
+//
+// @Summary      Login
+// @Description  Authenticate with email and password. Returns a session token.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        X-Tenant-ID  header    string              true   "Tenant identifier"
+// @Param        body         body      user.LoginRequest   true   "Login credentials"
+// @Success      200          {object}  user.LoginResponse
+// @Failure      401          {object}  httputil.Error
+// @Failure      429          {object}  httputil.Error
+// @Router       /login [post]
 func (h *UserHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -68,6 +92,16 @@ func (h *UserHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleLogout serves POST /logout.
+//
+// @Summary      Logout
+// @Description  Invalidate the current session token.
+// @Tags         auth
+// @Produce      json
+// @Param        X-Tenant-ID  header    string  true  "Tenant identifier"
+// @Security     SessionAuth
+// @Success      200
+// @Failure      401  {object}  httputil.Error
+// @Router       /logout [post]
 func (h *UserHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -85,6 +119,16 @@ func (h *UserHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleUserInfo serves GET /userinfo (OIDC UserInfo endpoint).
+//
+// @Summary      UserInfo
+// @Description  Returns claims about the authenticated user (OIDC Core §5.3). Pass the session token as a Bearer token.
+// @Tags         auth
+// @Produce      json
+// @Param        X-Tenant-ID  header    string  true  "Tenant identifier"
+// @Security     SessionAuth
+// @Success      200          {object}  user.UserInfoResponse
+// @Failure      401          {object}  httputil.Error
+// @Router       /userinfo [get]
 func (h *UserHandler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -119,6 +163,17 @@ func (h *UserHandler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleRequestOTP serves POST /otp/request.
+//
+// @Summary      Request OTP
+// @Description  Send a one-time password to the user's email or phone.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        X-Tenant-ID  header    string                    true  "Tenant identifier"
+// @Param        body         body      user.RequestOTPRequest    true  "OTP request"
+// @Success      200          {object}  user.RequestOTPResponse
+// @Failure      400          {object}  httputil.Error
+// @Router       /otp/request [post]
 func (h *UserHandler) HandleRequestOTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -142,6 +197,18 @@ func (h *UserHandler) HandleRequestOTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleVerifyOTP serves POST /otp/verify.
+//
+// @Summary      Verify OTP
+// @Description  Verify the one-time password sent by /otp/request.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        X-Tenant-ID  header    string                  true  "Tenant identifier"
+// @Param        body         body      user.VerifyOTPRequest   true  "OTP verification"
+// @Success      200
+// @Failure      400  {object}  httputil.Error
+// @Failure      429  {object}  httputil.Error
+// @Router       /otp/verify [post]
 func (h *UserHandler) HandleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -165,6 +232,17 @@ func (h *UserHandler) HandleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleResetPassword serves POST /password/reset.
+//
+// @Summary      Reset password
+// @Description  Reset a user's password using an OTP code. Call /otp/request with purpose=reset first.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        X-Tenant-ID  header    string                      true  "Tenant identifier"
+// @Param        body         body      user.ResetPasswordRequest   true  "Password reset request"
+// @Success      200
+// @Failure      400  {object}  httputil.Error
+// @Router       /password/reset [post]
 func (h *UserHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -187,6 +265,17 @@ func (h *UserHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 }
 
 // HandleListUsers serves GET /tenants/{tid}/users.
+//
+// @Summary      List users
+// @Tags         users
+// @Produce      json
+// @Param        tid     path      string  true   "Tenant ID"
+// @Param        offset  query     int     false  "Pagination offset"
+// @Param        limit   query     int     false  "Page size (default 20)"
+// @Security     AdminAuth
+// @Success      200  {array}   user.UserSummary
+// @Failure      400  {object}  httputil.Error
+// @Router       /tenants/{tid}/users [get]
 func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -220,6 +309,20 @@ func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleUpdateUser serves PUT /tenants/{tid}/users/{uid}.
+//
+// @Summary      Update user
+// @Description  Update a user's profile fields (name, phone, enabled status).
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        tid   path      string                    true  "Tenant ID"
+// @Param        uid   path      string                    true  "User ID"
+// @Param        body  body      user.UpdateUserRequest    true  "Fields to update"
+// @Security     AdminAuth
+// @Success      200  {object}  user.UserSummary
+// @Failure      400  {object}  httputil.Error
+// @Failure      404  {object}  httputil.Error
+// @Router       /tenants/{tid}/users/{uid} [put]
 func (h *UserHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -252,6 +355,17 @@ func (h *UserHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandlePurgeUser serves DELETE /tenants/{tid}/users/{uid}/purge (GDPR Art. 17 — right to erasure).
+//
+// @Summary      Purge user (GDPR)
+// @Description  Permanently delete all personal data for a user. Irreversible (GDPR Art. 17).
+// @Tags         users
+// @Produce      json
+// @Param        tid  path  string  true  "Tenant ID"
+// @Param        uid  path  string  true  "User ID"
+// @Security     AdminAuth
+// @Success      200
+// @Failure      400  {object}  httputil.Error
+// @Router       /tenants/{tid}/users/{uid}/purge [delete]
 func (h *UserHandler) HandlePurgeUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -275,6 +389,18 @@ func (h *UserHandler) HandlePurgeUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleExportUser serves GET /tenants/{tid}/users/{uid}/export (GDPR Art. 15/20 — right to access/portability).
+//
+// @Summary      Export user data (GDPR)
+// @Description  Download all personal data held for a user as JSON (GDPR Art. 15/20).
+// @Tags         users
+// @Produce      json
+// @Param        tid  path  string  true  "Tenant ID"
+// @Param        uid  path  string  true  "User ID"
+// @Security     AdminAuth
+// @Success      200  {object}  user.UserExportResponse
+// @Failure      400  {object}  httputil.Error
+// @Failure      404  {object}  httputil.Error
+// @Router       /tenants/{tid}/users/{uid}/export [get]
 func (h *UserHandler) HandleExportUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

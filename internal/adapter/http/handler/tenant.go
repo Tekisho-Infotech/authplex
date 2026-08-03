@@ -51,6 +51,17 @@ func (h *TenantHandler) HandleTenant(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// createTenant is the POST /tenants operation.
+//
+// @Summary      Create tenant
+// @Tags         tenants
+// @Accept       json
+// @Produce      json
+// @Param        body  body      tenant.CreateTenantRequest  true  "Tenant details"
+// @Security     AdminAuth
+// @Success      201  {object}  tenant.Tenant
+// @Failure      409  {object}  httputil.Error
+// @Router       /tenants [post]
 func (h *TenantHandler) createTenant(w http.ResponseWriter, r *http.Request) {
 	var req tenantsvc.CreateTenantRequest
 	if appErr := httputil.DecodeJSON(r, &req); appErr != nil {
@@ -67,6 +78,16 @@ func (h *TenantHandler) createTenant(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusCreated, created) //nolint:errcheck
 }
 
+// listTenants is the GET /tenants operation.
+//
+// @Summary      List tenants
+// @Tags         tenants
+// @Produce      json
+// @Param        offset  query     int  false  "Pagination offset"
+// @Param        limit   query     int  false  "Page size (default 20)"
+// @Security     AdminAuth
+// @Success      200  {array}   tenant.Tenant
+// @Router       /tenants [get]
 func (h *TenantHandler) listTenants(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(httputil.QueryParam(r, "offset", "0"))
 	limit, _ := strconv.Atoi(httputil.QueryParam(r, "limit", "20"))
@@ -85,6 +106,16 @@ func (h *TenantHandler) listTenants(w http.ResponseWriter, r *http.Request) {
 	}) //nolint:errcheck
 }
 
+// getTenant is the GET /tenants/{id} operation.
+//
+// @Summary      Get tenant
+// @Tags         tenants
+// @Produce      json
+// @Param        id  path      string  true  "Tenant ID"
+// @Security     AdminAuth
+// @Success      200  {object}  tenant.Tenant
+// @Failure      404  {object}  httputil.Error
+// @Router       /tenants/{id} [get]
 func (h *TenantHandler) getTenant(w http.ResponseWriter, r *http.Request, id string) {
 	t, appErr := h.svc.Get(r.Context(), id)
 	if appErr != nil {
@@ -95,6 +126,18 @@ func (h *TenantHandler) getTenant(w http.ResponseWriter, r *http.Request, id str
 	httputil.WriteJSON(w, http.StatusOK, t) //nolint:errcheck
 }
 
+// updateTenant is the PUT /tenants/{id} operation.
+//
+// @Summary      Update tenant
+// @Tags         tenants
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string                      true  "Tenant ID"
+// @Param        body  body      tenant.UpdateTenantRequest  true  "Fields to update"
+// @Security     AdminAuth
+// @Success      200  {object}  tenant.Tenant
+// @Failure      404  {object}  httputil.Error
+// @Router       /tenants/{id} [put]
 func (h *TenantHandler) updateTenant(w http.ResponseWriter, r *http.Request, id string) {
 	var req tenantsvc.UpdateTenantRequest
 	if appErr := httputil.DecodeJSON(r, &req); appErr != nil {
@@ -111,6 +154,15 @@ func (h *TenantHandler) updateTenant(w http.ResponseWriter, r *http.Request, id 
 	httputil.WriteJSON(w, http.StatusOK, updated) //nolint:errcheck
 }
 
+// deleteTenant is the DELETE /tenants/{id} operation.
+//
+// @Summary      Delete tenant
+// @Tags         tenants
+// @Param        id  path  string  true  "Tenant ID"
+// @Security     AdminAuth
+// @Success      204
+// @Failure      404  {object}  httputil.Error
+// @Router       /tenants/{id} [delete]
 func (h *TenantHandler) deleteTenant(w http.ResponseWriter, r *http.Request, id string) {
 	if appErr := h.svc.Delete(r.Context(), id); appErr != nil {
 		httputil.WriteError(w, appErr) //nolint:errcheck

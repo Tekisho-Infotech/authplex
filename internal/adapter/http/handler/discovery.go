@@ -20,6 +20,14 @@ func NewDiscoveryHandler(svc *discovery.Service) *DiscoveryHandler {
 
 // HandleDiscovery serves GET /.well-known/openid-configuration.
 // Uses WriteRaw because the response must match RFC 8414 exactly (no envelope).
+//
+// @Summary      OIDC discovery document
+// @Description  Returns the OpenID Connect discovery document (RFC 8414).
+// @Tags         oidc
+// @Produce      json
+// @Param        X-Tenant-ID  header    string  false  "Tenant identifier"
+// @Success      200          {object}  map[string]interface{}
+// @Router       /.well-known/openid-configuration [get]
 func (h *DiscoveryHandler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

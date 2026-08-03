@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/authplex/docs"
 	"github.com/authplex/internal/adapter/cache"
 	adaptcrypto "github.com/authplex/internal/adapter/crypto"
 	adaptemail "github.com/authplex/internal/adapter/email"
@@ -30,6 +31,7 @@ import (
 	"github.com/authplex/internal/adapter/postgres"
 	adaptredis "github.com/authplex/internal/adapter/redis"
 	adaptsms "github.com/authplex/internal/adapter/sms"
+	httpSwagger "github.com/swaggo/http-swagger"
 	adminsvc "github.com/authplex/internal/application/admin"
 	"github.com/authplex/internal/application/auth"
 	auditsvc "github.com/authplex/internal/application/audit"
@@ -462,6 +464,12 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) (http.Ha
 		}
 		tenantHandler.HandleTenant(w, r)
 	})))
+
+	// Swagger UI — override the restrictive CSP set by SecurityHeaders middleware
+	mux.Handle("/docs/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
+		httpSwagger.WrapHandler.ServeHTTP(w, r)
+	}))
 
 	// Prometheus metrics
 	mux.Handle("/metrics", promhttp.Handler())

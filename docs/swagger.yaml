@@ -1,0 +1,2389 @@
+definitions:
+  admin.BootstrapRequest:
+    properties:
+      bootstrap_key:
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  admin.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  client.ClientResponse:
+    properties:
+      allowed_scopes:
+        items:
+          type: string
+        type: array
+      client_id:
+        type: string
+      client_name:
+        type: string
+      client_secret:
+        type: string
+      client_type:
+        type: string
+      grant_types:
+        items:
+          type: string
+        type: array
+      redirect_uris:
+        items:
+          type: string
+        type: array
+    type: object
+  client.CreateClientRequest:
+    properties:
+      allowed_scopes:
+        items:
+          type: string
+        type: array
+      client_id:
+        description: optional; auto-generated if empty
+        type: string
+      client_name:
+        type: string
+      client_secret:
+        description: optional; auto-generated if empty (confidential only)
+        type: string
+      client_type:
+        type: string
+      grant_types:
+        items:
+          type: string
+        type: array
+      redirect_uris:
+        items:
+          type: string
+        type: array
+    type: object
+  client.UpdateClientRequest:
+    properties:
+      allowed_scopes:
+        items:
+          type: string
+        type: array
+      client_name:
+        type: string
+      redirect_uris:
+        items:
+          type: string
+        type: array
+    type: object
+  httputil.Error:
+    properties:
+      code:
+        type: string
+      details:
+        additionalProperties: {}
+        type: object
+      message:
+        type: string
+    type: object
+  mfa.EnrollRequest:
+    properties:
+      subject:
+        type: string
+    type: object
+  mfa.MFAVerifyRequest:
+    properties:
+      challenge_id:
+        type: string
+      code:
+        type: string
+      method:
+        type: string
+    type: object
+  mfa.VerifyRequest:
+    properties:
+      code:
+        type: string
+      subject:
+        type: string
+    type: object
+  mfa.WebAuthnLoginRequest:
+    properties:
+      subject:
+        type: string
+    type: object
+  mfa.WebAuthnRegisterRequest:
+    properties:
+      display_name:
+        type: string
+      subject:
+        type: string
+    type: object
+  provider.CreateProviderRequest:
+    properties:
+      auth_url:
+        type: string
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      discovery_url:
+        type: string
+      extra_config:
+        additionalProperties:
+          type: string
+        type: object
+      provider_type:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      token_url:
+        type: string
+      userinfo_url:
+        type: string
+    type: object
+  provider.ProviderResponse:
+    properties:
+      auth_url:
+        type: string
+      client_id:
+        type: string
+      discovery_url:
+        type: string
+      enabled:
+        type: boolean
+      extra_config:
+        additionalProperties:
+          type: string
+        type: object
+      id:
+        type: string
+      provider_type:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      token_url:
+        type: string
+      userinfo_url:
+        type: string
+    type: object
+  rbac.AssignRoleRequest:
+    properties:
+      role_id:
+        type: string
+    type: object
+  rbac.CreateRoleRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+    type: object
+  rbac.Role:
+    properties:
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      tenantID:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  rbac.UpdateRoleRequest:
+    properties:
+      description:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+    type: object
+  tenant.Algorithm:
+    enum:
+    - RS256
+    - ES256
+    type: string
+    x-enum-varnames:
+    - RS256
+    - ES256
+  tenant.CreateTenantRequest:
+    properties:
+      algorithm:
+        $ref: '#/definitions/tenant.Algorithm'
+      domain:
+        type: string
+      id:
+        type: string
+      issuer:
+        type: string
+    type: object
+  tenant.MFAPolicy:
+    properties:
+      methods:
+        description: e.g., ["totp"]
+        items:
+          type: string
+        type: array
+      required:
+        description: '"none", "optional", "required"'
+        type: string
+    type: object
+  tenant.SigningConfig:
+    properties:
+      activeKeyID:
+        type: string
+      algorithm:
+        $ref: '#/definitions/tenant.Algorithm'
+    type: object
+  tenant.Tenant:
+    properties:
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      domain:
+        type: string
+      id:
+        type: string
+      issuer:
+        type: string
+      mfa:
+        $ref: '#/definitions/tenant.MFAPolicy'
+      settings:
+        $ref: '#/definitions/tenant.TenantSettings'
+      signingConfig:
+        $ref: '#/definitions/tenant.SigningConfig'
+      tokenVersion:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  tenant.TenantSettings:
+    properties:
+      access_token_ttl:
+        description: seconds, default 3600 (1h)
+        type: integer
+      agent_rate_limit:
+        description: requests per minute for M2M clients, 0 = use global
+        type: integer
+      allowed_origins:
+        description: CORS per tenant
+        items:
+          type: string
+        type: array
+      lockout_duration:
+        description: seconds
+        type: integer
+      max_login_attempts:
+        description: 0 = unlimited
+        type: integer
+      password_min_length:
+        description: default 8
+        type: integer
+      password_require_number:
+        type: boolean
+      password_require_special:
+        type: boolean
+      password_require_uppercase:
+        type: boolean
+      refresh_token_ttl:
+        description: seconds, default 2592000 (30d)
+        type: integer
+      session_ttl:
+        description: seconds, default 86400 (24h)
+        type: integer
+      smtp_from:
+        type: string
+      smtp_host:
+        description: SMTP per-tenant override (empty = use global config)
+        type: string
+      smtp_password:
+        type: string
+      smtp_port:
+        type: integer
+      smtp_username:
+        type: string
+    type: object
+  tenant.UpdateTenantRequest:
+    properties:
+      domain:
+        type: string
+      issuer:
+        type: string
+      mfa:
+        $ref: '#/definitions/tenant.MFAPolicy'
+      settings:
+        $ref: '#/definitions/tenant.TenantSettings'
+    type: object
+  user.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  user.LoginResponse:
+    properties:
+      expires_in:
+        type: integer
+      session_token:
+        type: string
+    type: object
+  user.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      phone:
+        type: string
+    type: object
+  user.RegisterResponse:
+    properties:
+      email:
+        type: string
+      user_id:
+        type: string
+      verification_sent:
+        type: boolean
+    type: object
+  user.RequestOTPRequest:
+    properties:
+      email:
+        type: string
+      phone:
+        type: string
+      purpose:
+        description: '"login", "verify", "reset"'
+        type: string
+    type: object
+  user.RequestOTPResponse:
+    properties:
+      expires_in:
+        type: integer
+      message:
+        type: string
+    type: object
+  user.ResetPasswordRequest:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      new_password:
+        type: string
+      phone:
+        type: string
+    type: object
+  user.UpdateUserRequest:
+    properties:
+      enabled:
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  user.UserExportResponse:
+    properties:
+      consent_granted:
+        type: boolean
+      consent_timestamp:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      phone_verified:
+        type: boolean
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  user.UserInfoResponse:
+    properties:
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      name:
+        type: string
+      phone_number:
+        type: string
+      phone_number_verified:
+        type: boolean
+      sub:
+        type: string
+    type: object
+  user.UserSummary:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      enabled:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  user.VerifyOTPRequest:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      phone:
+        type: string
+    type: object
+  webhook.Webhook:
+    properties:
+      createdAt:
+        type: string
+      enabled:
+        type: boolean
+      events:
+        description: e.g., ["login_success", "register", "token_revoked"]
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      secret:
+        description: HMAC-SHA256 signing secret
+        type: string
+      tenantID:
+        type: string
+      url:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /.well-known/openid-configuration:
+    get:
+      description: Returns the OpenID Connect discovery document (RFC 8414).
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: OIDC discovery document
+      tags:
+      - oidc
+  /admin/bootstrap:
+    post:
+      consumes:
+      - application/json
+      description: Create the first super_admin user. Only succeeds when zero admin
+        users exist. The bootstrap_key must match AUTHPLEX_ADMIN_API_KEY.
+      parameters:
+      - description: Bootstrap request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/admin.BootstrapRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Bootstrap admin
+      tags:
+      - admin
+  /admin/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate an admin user and receive a short-lived JWT (1 hour
+        TTL).
+      parameters:
+      - description: Admin credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/admin.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Admin login
+      tags:
+      - admin
+  /admin/users:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AdminAuth: []
+      summary: List admin users
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Create a new admin user. Requires super_admin role.
+      parameters:
+      - description: New admin details (email, password, role, tenant_ids)
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Create admin user
+      tags:
+      - admin
+  /authorize:
+    get:
+      description: Initiates an OAuth 2.0 / OIDC authorization flow. Supports authorization_code
+        with PKCE, social login (set `provider`), and session-based auth.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Response type
+        enum:
+        - code
+        in: query
+        name: response_type
+        required: true
+        type: string
+      - description: Client ID
+        in: query
+        name: client_id
+        required: true
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        required: true
+        type: string
+      - description: Requested scopes (e.g. openid profile email)
+        in: query
+        name: scope
+        type: string
+      - description: Opaque state value
+        in: query
+        name: state
+        type: string
+      - description: PKCE code challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: PKCE method
+        enum:
+        - S256
+        in: query
+        name: code_challenge_method
+        type: string
+      - description: Social login provider (e.g. google, apple)
+        in: query
+        name: provider
+        type: string
+      - description: Nonce for ID token binding
+        in: query
+        name: nonce
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Authorization endpoint
+      tags:
+      - oidc
+  /callback:
+    get:
+      description: OAuth provider callback. Handles the authorization code exchange
+        for social login providers (Google, Apple, GitHub, etc.). The `state` param
+        encodes the tenant and original redirect URI.
+      parameters:
+      - description: Authorization code from provider
+        in: query
+        name: code
+        type: string
+      - description: State (contains tenant context)
+        in: query
+        name: state
+        type: string
+      - description: Error code from provider
+        in: query
+        name: error
+        type: string
+      - description: Error description
+        in: query
+        name: error_description
+        type: string
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Social login callback
+      tags:
+      - social
+  /device/authorize:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Initiate the OAuth 2.0 Device Authorization Grant (RFC 8628). Poll
+        /token with grant_type=urn:ietf:params:oauth:grant-type:device_code.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        required: true
+        type: string
+      - description: Requested scopes
+        in: formData
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Device authorization
+      tags:
+      - oidc
+  /introspect:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Determine the active state and metadata of a token (RFC 7662).
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Token to introspect
+        in: formData
+        name: token
+        required: true
+        type: string
+      - description: Token type hint
+        in: formData
+        name: token_type_hint
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Client secret
+        in: formData
+        name: client_secret
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Token introspection
+      tags:
+      - oidc
+  /jwks:
+    get:
+      description: Returns the tenant's public signing keys (RFC 7517).
+      parameters:
+      - description: Tenant identifier (defaults to \
+        in: header
+        name: X-Tenant-ID
+        type: string
+      - description: Tenant identifier (alternative to header)
+        in: query
+        name: tenant_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: JSON Web Key Set
+      tags:
+      - oidc
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate with email and password. Returns a session token.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/user.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.LoginResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Login
+      tags:
+      - auth
+  /logout:
+    post:
+      description: Invalidate the current session token.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - SessionAuth: []
+      summary: Logout
+      tags:
+      - auth
+  /mfa/totp/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Verify the first TOTP code from the authenticator app to activate
+        enrollment.
+      parameters:
+      - description: Confirm request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/mfa.VerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Confirm TOTP enrollment
+      tags:
+      - mfa
+  /mfa/totp/enroll:
+    post:
+      consumes:
+      - application/json
+      description: Begin TOTP MFA enrollment. Returns a secret and QR code to scan
+        with an authenticator app. Confirm enrollment with /mfa/totp/confirm.
+      parameters:
+      - description: Enroll request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/mfa.EnrollRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Enroll TOTP
+      tags:
+      - mfa
+  /mfa/verify:
+    post:
+      consumes:
+      - application/json
+      description: Complete an MFA challenge (TOTP or WebAuthn) during authorization.
+        Returns an authorization code on success.
+      parameters:
+      - description: MFA verify request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/mfa.MFAVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Verify MFA challenge
+      tags:
+      - mfa
+  /mfa/webauthn/login/begin:
+    post:
+      consumes:
+      - application/json
+      description: Start WebAuthn authentication. Returns PublicKeyCredentialRequestOptions
+        (W3C WebAuthn spec).
+      parameters:
+      - description: Login request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/mfa.WebAuthnLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Begin WebAuthn login
+      tags:
+      - mfa
+  /mfa/webauthn/login/finish:
+    post:
+      consumes:
+      - application/json
+      description: Complete WebAuthn authentication by posting the credential assertion.
+      parameters:
+      - description: Credential assertion from authenticator ({challenge_id, response})
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Finish WebAuthn login
+      tags:
+      - mfa
+  /mfa/webauthn/register/begin:
+    post:
+      consumes:
+      - application/json
+      description: Start WebAuthn authenticator registration. Returns PublicKeyCredentialCreationOptions
+        (W3C WebAuthn spec).
+      parameters:
+      - description: Register request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/mfa.WebAuthnRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Begin WebAuthn registration
+      tags:
+      - mfa
+  /mfa/webauthn/register/finish:
+    post:
+      consumes:
+      - application/json
+      description: Complete WebAuthn authenticator registration by posting the credential
+        response.
+      parameters:
+      - description: Credential response from authenticator ({subject, response})
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Finish WebAuthn registration
+      tags:
+      - mfa
+  /otp/request:
+    post:
+      consumes:
+      - application/json
+      description: Send a one-time password to the user's email or phone.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: OTP request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/user.RequestOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.RequestOTPResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Request OTP
+      tags:
+      - auth
+  /otp/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verify the one-time password sent by /otp/request.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: OTP verification
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/user.VerifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Verify OTP
+      tags:
+      - auth
+  /password/reset:
+    post:
+      consumes:
+      - application/json
+      description: Reset a user's password using an OTP code. Call /otp/request with
+        purpose=reset first.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Password reset request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/user.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Reset password
+      tags:
+      - auth
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account within the resolved tenant.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Registration details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/user.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/user.RegisterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Register user
+      tags:
+      - auth
+  /revoke:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Revoke an access or refresh token (RFC 7009). Always returns 200
+        per spec.
+      parameters:
+      - description: Tenant identifier (optional)
+        in: header
+        name: X-Tenant-ID
+        type: string
+      - description: Token to revoke
+        in: formData
+        name: token
+        required: true
+        type: string
+      - description: Token type hint
+        enum:
+        - access_token
+        - refresh_token
+        in: formData
+        name: token_type_hint
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Client secret
+        in: formData
+        name: client_secret
+        type: string
+      responses:
+        "200":
+          description: OK
+      summary: Token revocation
+      tags:
+      - oidc
+  /saml/acs:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Receives the SAML assertion posted by the Identity Provider after
+        authentication.
+      parameters:
+      - description: Base64-encoded SAML assertion
+        in: formData
+        name: SAMLResponse
+        required: true
+        type: string
+      - description: Relay state (encodes original request context)
+        in: formData
+        name: RelayState
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: SAML Assertion Consumer Service
+      tags:
+      - saml
+  /saml/metadata:
+    get:
+      description: Returns the SAML 2.0 Service Provider metadata XML document.
+      parameters:
+      - description: Provider ID
+        in: query
+        name: provider
+        required: true
+        type: string
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        type: string
+      - description: Tenant identifier (alternative to header)
+        in: query
+        name: tenant
+        type: string
+      produces:
+      - text/xml
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: SAML SP metadata
+      tags:
+      - saml
+  /saml/sso:
+    get:
+      description: Initiates SAML 2.0 Single Sign-On. Redirects the browser to the
+        configured Identity Provider.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      - description: Provider ID
+        in: query
+        name: provider
+        required: true
+        type: string
+      - description: OAuth client ID
+        in: query
+        name: client_id
+        type: string
+      - description: Post-auth redirect URI
+        in: query
+        name: redirect_uri
+        type: string
+      - description: Requested scopes
+        in: query
+        name: scope
+        type: string
+      - description: Opaque state value
+        in: query
+        name: state
+        type: string
+      - description: PKCE code challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: PKCE method
+        in: query
+        name: code_challenge_method
+        type: string
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: SAML SSO initiation
+      tags:
+      - saml
+  /tenants:
+    get:
+      parameters:
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      - description: Page size (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/tenant.Tenant'
+            type: array
+      security:
+      - AdminAuth: []
+      summary: List tenants
+      tags:
+      - tenants
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tenant.CreateTenantRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/tenant.Tenant'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Create tenant
+      tags:
+      - tenants
+  /tenants/{id}:
+    delete:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Delete tenant
+      tags:
+      - tenants
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tenant.Tenant'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Get tenant
+      tags:
+      - tenants
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tenant.UpdateTenantRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/tenant.Tenant'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Update tenant
+      tags:
+      - tenants
+  /tenants/{tid}/audit:
+    get:
+      description: Return paginated audit events for the tenant. All parameters are
+        optional filters.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Filter by actor (user) ID
+        in: query
+        name: actor_id
+        type: string
+      - description: Filter by event type (e.g. user.login)
+        in: query
+        name: action
+        type: string
+      - description: Filter by resource type (e.g. client)
+        in: query
+        name: resource_type
+        type: string
+      - description: Filter by resource ID
+        in: query
+        name: resource_id
+        type: string
+      - description: Max results (default 50)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Query audit logs
+      tags:
+      - audit
+  /tenants/{tid}/clients:
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      - description: Page size (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/client.ClientResponse'
+            type: array
+      security:
+      - AdminAuth: []
+      summary: List clients
+      tags:
+      - clients
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Client definition
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.CreateClientRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/client.ClientResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Create client
+      tags:
+      - clients
+  /tenants/{tid}/clients/{cid}:
+    delete:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: cid
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Delete client
+      tags:
+      - clients
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: cid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/client.ClientResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Get client
+      tags:
+      - clients
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: cid
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/client.UpdateClientRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/client.ClientResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Update client
+      tags:
+      - clients
+  /tenants/{tid}/clients/{cid}/api-key:
+    post:
+      description: Generate a non-expiring API key for a client. The raw key is returned
+        once and cannot be retrieved again.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: cid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Generate API key
+      tags:
+      - clients
+  /tenants/{tid}/providers:
+    get:
+      description: List all identity providers configured for the tenant.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/provider.ProviderResponse'
+            type: array
+      security:
+      - AdminAuth: []
+      summary: List providers
+      tags:
+      - providers
+    post:
+      consumes:
+      - application/json
+      description: Create a new identity provider configuration for the tenant.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Provider configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/provider.CreateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/provider.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Create provider
+      tags:
+      - providers
+  /tenants/{tid}/providers/{pid}:
+    delete:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Provider ID
+        in: path
+        name: pid
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Delete provider
+      tags:
+      - providers
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Provider ID
+        in: path
+        name: pid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/provider.ProviderResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Get provider
+      tags:
+      - providers
+  /tenants/{tid}/roles:
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/rbac.Role'
+            type: array
+      security:
+      - AdminAuth: []
+      summary: List roles
+      tags:
+      - roles
+    post:
+      consumes:
+      - application/json
+      description: Create a new custom role for the tenant.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Role definition
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rbac.CreateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/rbac.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Create role
+      tags:
+      - roles
+  /tenants/{tid}/roles/{rid}:
+    delete:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Role ID
+        in: path
+        name: rid
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Delete role
+      tags:
+      - roles
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Role ID
+        in: path
+        name: rid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rbac.Role'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Get role
+      tags:
+      - roles
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Role ID
+        in: path
+        name: rid
+        required: true
+        type: string
+      - description: Updated role definition
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rbac.UpdateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rbac.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Update role
+      tags:
+      - roles
+  /tenants/{tid}/users:
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      - description: Page size (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/user.UserSummary'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: List users
+      tags:
+      - users
+  /tenants/{tid}/users/{uid}:
+    put:
+      consumes:
+      - application/json
+      description: Update a user's profile fields (name, phone, enabled status).
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/user.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.UserSummary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Update user
+      tags:
+      - users
+  /tenants/{tid}/users/{uid}/export:
+    get:
+      description: Download all personal data held for a user as JSON (GDPR Art. 15/20).
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.UserExportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Export user data (GDPR)
+      tags:
+      - users
+  /tenants/{tid}/users/{uid}/permissions:
+    get:
+      description: Return the full list of permission strings for a user, computed
+        from their assigned roles.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+      security:
+      - AdminAuth: []
+      summary: Get user permissions
+      tags:
+      - roles
+  /tenants/{tid}/users/{uid}/purge:
+    delete:
+      description: Permanently delete all personal data for a user. Irreversible (GDPR
+        Art. 17).
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Purge user (GDPR)
+      tags:
+      - users
+  /tenants/{tid}/users/{uid}/roles:
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/rbac.Role'
+            type: array
+      security:
+      - AdminAuth: []
+      summary: List user roles
+      tags:
+      - roles
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: string
+      - description: Role assignment
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rbac.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Assign role to user
+      tags:
+      - roles
+  /tenants/{tid}/webhooks:
+    get:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AdminAuth: []
+      summary: List webhooks
+      tags:
+      - webhooks
+    post:
+      consumes:
+      - application/json
+      description: Register a new webhook endpoint that will receive event notifications
+        for the tenant.
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Webhook details (url, events[])
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/webhook.Webhook'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Create webhook
+      tags:
+      - webhooks
+  /tenants/{tid}/webhooks/{wid}:
+    delete:
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tid
+        required: true
+        type: string
+      - description: Webhook ID
+        in: path
+        name: wid
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - AdminAuth: []
+      summary: Delete webhook
+      tags:
+      - webhooks
+  /token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Exchange an authorization code or refresh token for access/ID tokens
+        (RFC 6749 §3.2). Supports authorization_code, refresh_token, client_credentials,
+        password, and device_code grant types.
+      parameters:
+      - description: Tenant identifier (optional for refresh_token grants)
+        in: header
+        name: X-Tenant-ID
+        type: string
+      - description: Grant type
+        enum:
+        - authorization_code
+        - refresh_token
+        - client_credentials
+        - password
+        - urn:ietf:params:oauth:grant-type:device_code
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Authorization code (authorization_code grant)
+        in: formData
+        name: code
+        type: string
+      - description: Redirect URI
+        in: formData
+        name: redirect_uri
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Client secret (confidential clients)
+        in: formData
+        name: client_secret
+        type: string
+      - description: PKCE verifier
+        in: formData
+        name: code_verifier
+        type: string
+      - description: Refresh token (refresh_token grant)
+        in: formData
+        name: refresh_token
+        type: string
+      - description: Device code (device_code grant)
+        in: formData
+        name: device_code
+        type: string
+      - description: Username (password grant)
+        in: formData
+        name: username
+        type: string
+      - description: Password (password grant)
+        in: formData
+        name: password
+        type: string
+      - description: Requested scopes
+        in: formData
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      summary: Token endpoint
+      tags:
+      - oidc
+  /userinfo:
+    get:
+      description: Returns claims about the authenticated user (OIDC Core §5.3). Pass
+        the session token as a Bearer token.
+      parameters:
+      - description: Tenant identifier
+        in: header
+        name: X-Tenant-ID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.UserInfoResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.Error'
+      security:
+      - SessionAuth: []
+      summary: UserInfo
+      tags:
+      - auth
+swagger: "2.0"

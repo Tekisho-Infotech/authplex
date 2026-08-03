@@ -51,6 +51,17 @@ func NewAdminHandler(svc *adminsvc.Service, jwksSvc *jwks.Service, signer token.
 }
 
 // HandleBootstrap serves POST /admin/bootstrap.
+//
+// @Summary      Bootstrap admin
+// @Description  Create the first super_admin user. Only succeeds when zero admin users exist. The bootstrap_key must match AUTHPLEX_ADMIN_API_KEY.
+// @Tags         admin
+// @Accept       json
+// @Produce      json
+// @Param        body  body      admin.BootstrapRequest  true  "Bootstrap request"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      401   {object}  httputil.Error
+// @Failure      409   {object}  httputil.Error
+// @Router       /admin/bootstrap [post]
 func (h *AdminHandler) HandleBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -73,6 +84,16 @@ func (h *AdminHandler) HandleBootstrap(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleLogin serves POST /admin/login.
+//
+// @Summary      Admin login
+// @Description  Authenticate an admin user and receive a short-lived JWT (1 hour TTL).
+// @Tags         admin
+// @Accept       json
+// @Produce      json
+// @Param        body  body      admin.LoginRequest  true  "Admin credentials"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      401   {object}  httputil.Error
+// @Router       /admin/login [post]
 func (h *AdminHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
@@ -114,30 +135,55 @@ func (h *AdminHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) HandleUsers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		admins, appErr := h.svc.ListAdmins(r.Context())
-		if appErr != nil {
-			httputil.WriteError(w, appErr) //nolint:errcheck
-			return
-		}
-		httputil.WriteJSON(w, http.StatusOK, map[string]any{"admins": admins}) //nolint:errcheck
-
+		h.listAdmins(w, r)
 	case http.MethodPost:
-		var req adminsvc.CreateAdminRequest
-		if appErr := httputil.DecodeJSON(r, &req); appErr != nil {
-			httputil.WriteError(w, appErr) //nolint:errcheck
-			return
-		}
-
-		resp, appErr := h.svc.CreateAdmin(r.Context(), req)
-		if appErr != nil {
-			httputil.WriteError(w, appErr) //nolint:errcheck
-			return
-		}
-		httputil.WriteJSON(w, http.StatusCreated, resp) //nolint:errcheck
-
+		h.createAdmin(w, r)
 	default:
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
 	}
+}
+
+// listAdmins is the GET /admin/users operation.
+//
+// @Summary      List admin users
+// @Tags         admin
+// @Produce      json
+// @Security     AdminAuth
+// @Success      200  {object}  map[string]interface{}
+// @Router       /admin/users [get]
+func (h *AdminHandler) listAdmins(w http.ResponseWriter, r *http.Request) {
+	admins, appErr := h.svc.ListAdmins(r.Context())
+	if appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{"admins": admins}) //nolint:errcheck
+}
+
+// createAdmin is the POST /admin/users operation.
+//
+// @Summary      Create admin user
+// @Description  Create a new admin user. Requires super_admin role.
+// @Tags         admin
+// @Accept       json
+// @Produce      json
+// @Param        body  body      map[string]interface{}  true  "New admin details (email, password, role, tenant_ids)"
+// @Security     AdminAuth
+// @Success      201  {object}  map[string]interface{}
+// @Failure      409  {object}  httputil.Error
+// @Router       /admin/users [post]
+func (h *AdminHandler) createAdmin(w http.ResponseWriter, r *http.Request) {
+	var req adminsvc.CreateAdminRequest
+	if appErr := httputil.DecodeJSON(r, &req); appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+	resp, appErr := h.svc.CreateAdmin(r.Context(), req)
+	if appErr != nil {
+		httputil.WriteError(w, appErr) //nolint:errcheck
+		return
+	}
+	httputil.WriteJSON(w, http.StatusCreated, resp) //nolint:errcheck
 }
 
 // signAdminJWT creates a signed JWT for an admin user.

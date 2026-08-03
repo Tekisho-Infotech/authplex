@@ -18,6 +18,19 @@ func NewIntrospectHandler(svc *auth.Service) *IntrospectHandler {
 }
 
 // HandleIntrospect serves POST /introspect.
+//
+// @Summary      Token introspection
+// @Description  Determine the active state and metadata of a token (RFC 7662).
+// @Tags         oidc
+// @Accept       application/x-www-form-urlencoded
+// @Produce      json
+// @Param        X-Tenant-ID      header    string  true   "Tenant identifier"
+// @Param        token            formData  string  true   "Token to introspect"
+// @Param        token_type_hint  formData  string  false  "Token type hint"
+// @Param        client_id        formData  string  false  "Client ID"
+// @Param        client_secret    formData  string  false  "Client secret"
+// @Success      200              {object}  map[string]interface{}
+// @Router       /introspect [post]
 func (h *IntrospectHandler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck

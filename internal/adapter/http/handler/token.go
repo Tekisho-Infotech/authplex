@@ -27,6 +27,29 @@ func (h *TokenHandler) WithClientService(svc *clientsvc.Service) *TokenHandler {
 }
 
 // HandleToken serves POST /token.
+//
+// @Summary      Token endpoint
+// @Description  Exchange an authorization code or refresh token for access/ID tokens (RFC 6749 §3.2). Supports authorization_code, refresh_token, client_credentials, password, and device_code grant types.
+// @Tags         oidc
+// @Accept       application/x-www-form-urlencoded
+// @Produce      json
+// @Param        X-Tenant-ID    header    string  false  "Tenant identifier (optional for refresh_token grants)"
+// @Param        grant_type     formData  string  true   "Grant type"  Enums(authorization_code, refresh_token, client_credentials, password, urn:ietf:params:oauth:grant-type:device_code)
+// @Param        code           formData  string  false  "Authorization code (authorization_code grant)"
+// @Param        redirect_uri   formData  string  false  "Redirect URI"
+// @Param        client_id      formData  string  false  "Client ID"
+// @Param        client_secret  formData  string  false  "Client secret (confidential clients)"
+// @Param        code_verifier  formData  string  false  "PKCE verifier"
+// @Param        refresh_token  formData  string  false  "Refresh token (refresh_token grant)"
+// @Param        device_code    formData  string  false  "Device code (device_code grant)"
+// @Param        username       formData  string  false  "Username (password grant)"
+// @Param        password       formData  string  false  "Password (password grant)"
+// @Param        scope          formData  string  false  "Requested scopes"
+// @Success      200            {object}  map[string]interface{}
+// @Failure      400            {object}  httputil.Error
+// @Failure      401            {object}  httputil.Error
+// @Failure      429            {object}  httputil.Error
+// @Router       /token [post]
 func (h *TokenHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httputil.WriteError(w, httputil.MethodNotAllowed(r.Method)) //nolint:errcheck
