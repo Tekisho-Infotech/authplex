@@ -26,7 +26,7 @@ func (r *JWKRepository) Store(ctx context.Context, kp jwk.KeyPair) error {
 	ctx, cancel := WithQueryTimeout(ctx)
 	defer cancel()
 	query := `INSERT INTO jwk_pairs (id, tenant_id, key_type, algorithm, key_use, private_key, public_key, active, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		kp.ID,
@@ -48,40 +48,48 @@ func (r *JWKRepository) Store(ctx context.Context, kp jwk.KeyPair) error {
 
 // GetActive returns the active key pair for a tenant.
 func (r *JWKRepository) GetActive(ctx context.Context, tenantID string) (jwk.KeyPair, error) {
-	ctx, cancel := WithQueryTimeout(ctx)
-	defer cancel()
-	query := `SELECT id, tenant_id, key_type, algorithm, key_use, private_key, public_key, active, created_at, expires_at
-		FROM jwk_pairs WHERE tenant_id = $1 AND active = true ORDER BY created_at DESC LIMIT 1`
+	var result jwk.KeyPair
+	txErr := WithTenantTx(ctx, r.db, tenantID, func(tx *sql.Tx) error {
+		qCtx, cancel := WithQueryTimeout(ctx)
+		defer cancel()
+		query := `SELECT id, tenant_id, key_type, algorithm, key_use, private_key, public_key, active, created_at, expires_at
+            FROM jwk_pairs WHERE tenant_id = $1 AND active = true ORDER BY created_at DESC LIMIT 1`
 
-	var kp jwk.KeyPair
-	var keyType, algorithm, use string
-	var expiresAt *time.Time
+		var keyType, algorithm, use string
+		var expiresAt *time.Time
 
-	err := r.db.QueryRowContext(ctx, query, tenantID).Scan(
-		&kp.ID,
-		&kp.TenantID,
-		&keyType,
-		&algorithm,
-		&use,
-		&kp.PrivateKey,
-		&kp.PublicKey,
-		&kp.Active,
-		&kp.CreatedAt,
-		&expiresAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return jwk.KeyPair{}, apperrors.New(apperrors.ErrNotFound, "no active key pair for tenant")
+		err := tx.QueryRowContext(qCtx, query, tenantID).Scan(
+			&result.ID,
+			&result.TenantID,
+			&keyType,
+			&algorithm,
+			&use,
+			&result.PrivateKey,
+			&result.PublicKey,
+			&result.Active,
+			&result.CreatedAt,
+			&expiresAt,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return apperrors.New(apperrors.ErrNotFound, "no active key pair for tenant")
+			}
+			return apperrors.Wrap(apperrors.ErrInternal, "failed to query active key pair", err)
 		}
-		return jwk.KeyPair{}, apperrors.Wrap(apperrors.ErrInternal, "failed to query active key pair", err)
+
+		result.KeyType = jwk.KeyType(keyType)
+		result.Algorithm = algorithm
+		result.Use = jwk.KeyUse(use)
+		result.ExpiresAt = expiresAt
+		return nil
+	})
+	if txErr != nil {
+		if appErr, ok := txErr.(*apperrors.AppError); ok {
+			return jwk.KeyPair{}, appErr
+		}
+		return jwk.KeyPair{}, apperrors.Wrap(apperrors.ErrInternal, "tenant context setup failed", txErr)
 	}
-
-	kp.KeyType = jwk.KeyType(keyType)
-	kp.Algorithm = algorithm
-	kp.Use = jwk.KeyUse(use)
-	kp.ExpiresAt = expiresAt
-
-	return kp, nil
+	return result, nil
 }
 
 // GetAllPublic returns all key pairs for a tenant (for JWKS endpoint).

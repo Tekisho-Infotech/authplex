@@ -45,34 +45,43 @@ func (r *ClientRepository) Create(ctx context.Context, c client.Client) error {
 }
 
 func (r *ClientRepository) GetByID(ctx context.Context, id, tenantID string) (client.Client, error) {
-	ctx, cancel := WithQueryTimeout(ctx)
-	defer cancel()
-	query := `SELECT client_id, tenant_id, client_name, client_type, secret_hash, redirect_uris, allowed_scopes, allowed_grant_types, created_at, updated_at, deleted_at
-		FROM clients WHERE client_id = $1 AND tenant_id = $2`
+	var result client.Client
+	txErr := WithTenantTx(ctx, r.db, tenantID, func(tx *sql.Tx) error {
+		qCtx, cancel := WithQueryTimeout(ctx)
+		defer cancel()
+		query := `SELECT client_id, tenant_id, client_name, client_type, secret_hash, redirect_uris, allowed_scopes, allowed_grant_types, created_at, updated_at, deleted_at
+            FROM clients WHERE client_id = $1 AND tenant_id = $2`
 
-	var c client.Client
-	var clientType string
-	var redirectURIs, scopes, grantTypes []string
-	var deletedAt *time.Time
+		var clientType string
+		var redirectURIs, scopes, grantTypes []string
+		var deletedAt *time.Time
 
-	err := r.db.QueryRowContext(ctx, query, id, tenantID).Scan(
-		&c.ID, &c.TenantID, &c.ClientName, &clientType, &c.SecretHash,
-		(*pgArray)(&redirectURIs), (*pgArray)(&scopes), (*pgArray)(&grantTypes),
-		&c.CreatedAt, &c.UpdatedAt, &deletedAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return client.Client{}, apperrors.New(apperrors.ErrNotFound, "client not found")
+		err := tx.QueryRowContext(qCtx, query, id, tenantID).Scan(
+			&result.ID, &result.TenantID, &result.ClientName, &clientType, &result.SecretHash,
+			(*pgArray)(&redirectURIs), (*pgArray)(&scopes), (*pgArray)(&grantTypes),
+			&result.CreatedAt, &result.UpdatedAt, &deletedAt,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return apperrors.New(apperrors.ErrNotFound, "client not found")
+			}
+			return apperrors.Wrap(apperrors.ErrInternal, "failed to query client", err)
 		}
-		return client.Client{}, apperrors.Wrap(apperrors.ErrInternal, "failed to query client", err)
-	}
 
-	c.ClientType = client.ClientType(clientType)
-	c.RedirectURIs = redirectURIs
-	c.AllowedScopes = scopes
-	c.AllowedGrantTypes = toGrantTypes(grantTypes)
-	c.DeletedAt = deletedAt
-	return c, nil
+		result.ClientType = client.ClientType(clientType)
+		result.RedirectURIs = redirectURIs
+		result.AllowedScopes = scopes
+		result.AllowedGrantTypes = toGrantTypes(grantTypes)
+		result.DeletedAt = deletedAt
+		return nil
+	})
+	if txErr != nil {
+		if appErr, ok := txErr.(*apperrors.AppError); ok {
+			return client.Client{}, appErr
+		}
+		return client.Client{}, apperrors.Wrap(apperrors.ErrInternal, "tenant context setup failed", txErr)
+	}
+	return result, nil
 }
 
 func (r *ClientRepository) Update(ctx context.Context, c client.Client) error {
