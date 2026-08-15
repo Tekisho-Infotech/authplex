@@ -16,7 +16,12 @@ func WithTenantTx(ctx context.Context, db *sql.DB, tenantID string, fn func(tx *
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if _, err := tx.ExecContext(ctx, "SET LOCAL app.tenant_id = $1", tenantID); err != nil {
+	var ignored string
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT set_config('app.tenant_id', $1, true)",
+		tenantID,
+	).Scan(&ignored); err != nil {
 		return fmt.Errorf("set tenant context: %w", err)
 	}
 
