@@ -13,7 +13,7 @@ type Config struct {
 	HTTPPort       int                `env:"AUTHPLEX_HTTP_PORT"       envDefault:"8080"`
 	DatabaseDSN    string             `env:"AUTHPLEX_DATABASE_DSN"    envDefault:"postgres://authplex:authplex_dev@localhost:5432/authplex?sslmode=disable"`
 	DatabaseDriver database.Driver    `env:"AUTHPLEX_DATABASE_DRIVER" envDefault:"postgres"`
-	RedisURL       string             `env:"AUTHPLEX_REDIS_URL"       envDefault:"redis://localhost:6379"`
+	RedisURL       string             `env:"AUTHPLEX_REDIS_URL"       envDefault:""`
 	LogLevel       string             `env:"AUTHPLEX_LOG_LEVEL"       envDefault:""`
 	TenantMode       TenantMode         `env:"AUTHPLEX_TENANT_MODE"        envDefault:"header"`
 	Issuer           string             `env:"AUTHPLEX_ISSUER"             envDefault:"http://localhost:8080"`
