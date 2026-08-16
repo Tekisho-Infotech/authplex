@@ -330,9 +330,13 @@ func setupServerWithRepos(cfg config.Config, log *slog.Logger, r repos) (http.Ha
 	// OIDC/OAuth routes (wrapped with tenant middleware)
 	mux.Handle("/.well-known/openid-configuration",
 		tenantResolver.Middleware(http.HandlerFunc(discoveryHandler.HandleDiscovery)))
-	// JWKS is public (no tenant middleware) — allows standard OIDC libraries to fetch keys
-	// The handler falls back to X-Tenant-ID header or "default" tenant
-	mux.HandleFunc("/jwks", jwksHandler.HandleJWKS)
+	// JWKS stays public (no authentication) so standard OIDC libraries can fetch keys.
+	// Optional() keeps a missing X-Tenant-ID from being an error, but resolving the
+	// tenant — from the header, or AUTHPLEX_DEFAULT_TENANT_ID — gives the repository a
+	// real tenant to set as RLS context. Falling through to the literal "default" tenant
+	// yields a cross-tenant query, which the tenant_isolation policy filters to nothing.
+	mux.Handle("/jwks",
+		tenantResolver.Optional().Middleware(http.HandlerFunc(jwksHandler.HandleJWKS)))
 	mux.Handle("/authorize",
 		tenantResolver.Middleware(http.HandlerFunc(authorizeHandler.HandleAuthorize)))
 	// /token and /revoke: tenant header is optional because refresh_token and

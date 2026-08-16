@@ -96,30 +96,54 @@ func (r *JWKRepository) GetActive(ctx context.Context, tenantID string) (jwk.Key
 
 // GetAllPublic returns all key pairs for a tenant (for JWKS endpoint).
 func (r *JWKRepository) GetAllPublic(ctx context.Context, tenantID string) ([]jwk.KeyPair, error) {
-	ctx, cancel := WithQueryTimeout(ctx)
-	defer cancel()
-
-	var (
-		query string
-		rows  *sql.Rows
-		err   error
-	)
 	// Empty tenantID means "return all active keys across all tenants" — used by the
 	// unauthenticated /jwks endpoint so resource servers can validate any tenant's JWT.
+	// A cross-tenant read has no single tenant to scope to, so it cannot set the RLS
+	// context; under an enforced tenant_isolation policy it returns no rows.
 	if tenantID == "" || tenantID == "default" {
-		query = `SELECT id, tenant_id, key_type, algorithm, key_use, public_key, active, created_at, expires_at
+		qCtx, cancel := WithQueryTimeout(ctx)
+		defer cancel()
+		query := `SELECT id, tenant_id, key_type, algorithm, key_use, public_key, active, created_at, expires_at
 			FROM jwk_pairs WHERE active = true ORDER BY created_at DESC`
-		rows, err = r.db.QueryContext(ctx, query)
-	} else {
-		query = `SELECT id, tenant_id, key_type, algorithm, key_use, public_key, active, created_at, expires_at
-			FROM jwk_pairs WHERE tenant_id = $1 ORDER BY created_at DESC`
-		rows, err = r.db.QueryContext(ctx, query, tenantID)
-	}
-	if err != nil {
-		return nil, apperrors.Wrap(apperrors.ErrInternal, "failed to query key pairs", err)
-	}
-	defer rows.Close()
 
+		rows, err := r.db.QueryContext(qCtx, query)
+		if err != nil {
+			return nil, apperrors.Wrap(apperrors.ErrInternal, "failed to query key pairs", err)
+		}
+		defer rows.Close()
+		return scanPublicKeyPairs(rows)
+	}
+
+	// Tenant-scoped read: set the RLS tenant context, as GetActive does. Without it
+	// the tenant_isolation_jwk_pairs USING clause filters every row out and the JWKS
+	// endpoint returns an empty key set even though the keys exist.
+	var result []jwk.KeyPair
+	txErr := WithTenantTx(ctx, r.db, tenantID, func(tx *sql.Tx) error {
+		qCtx, cancel := WithQueryTimeout(ctx)
+		defer cancel()
+		query := `SELECT id, tenant_id, key_type, algorithm, key_use, public_key, active, created_at, expires_at
+            FROM jwk_pairs WHERE tenant_id = $1 ORDER BY created_at DESC`
+
+		rows, err := tx.QueryContext(qCtx, query, tenantID)
+		if err != nil {
+			return apperrors.Wrap(apperrors.ErrInternal, "failed to query key pairs", err)
+		}
+		defer rows.Close()
+
+		result, err = scanPublicKeyPairs(rows)
+		return err
+	})
+	if txErr != nil {
+		if appErr, ok := txErr.(*apperrors.AppError); ok {
+			return nil, appErr
+		}
+		return nil, apperrors.Wrap(apperrors.ErrInternal, "tenant context setup failed", txErr)
+	}
+	return result, nil
+}
+
+// scanPublicKeyPairs materialises key pairs from a public-column query result.
+func scanPublicKeyPairs(rows *sql.Rows) ([]jwk.KeyPair, error) {
 	var pairs []jwk.KeyPair
 	for rows.Next() {
 		var kp jwk.KeyPair

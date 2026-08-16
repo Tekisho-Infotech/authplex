@@ -249,6 +249,62 @@ func TestJWKRepository_Store_UnderRLS(t *testing.T) {
 	assert.Equal(t, tenantID, active.TenantID)
 }
 
+// TestJWKRepository_GetAllPublic_UnderRLS proves the /jwks read path sets the tenant
+// context. Without it the tenant_isolation USING clause filters every row out and the
+// endpoint returns {"keys":[]} even though the signing key exists and can sign JWTs.
+func TestJWKRepository_GetAllPublic_UnderRLS(t *testing.T) {
+	db, cleanup := setupPostgresRLS(t)
+	defer cleanup()
+
+	repo := NewJWKRepository(db)
+	ctx := context.Background()
+
+	const tenantID = "4aa2670c-2a50-5851-a4e4-f4931e6f49e5"
+
+	kid := uuid.New().String()
+	kp, err := jwk.NewKeyPair(kid, tenantID, jwk.RSA, "RS256", []byte("priv"), []byte("pub"))
+	require.NoError(t, err)
+	require.NoError(t, repo.Store(ctx, kp))
+
+	pairs, err := repo.GetAllPublic(ctx, tenantID)
+	require.NoError(t, err)
+	require.Len(t, pairs, 1, "GetAllPublic must set tenant context so RLS does not hide the key")
+
+	// The JWKS "kid" is projected from this ID, and the JWT header carries the same
+	// value via signer.Sign(claims, kp.ID, ...) — they must agree.
+	assert.Equal(t, kid, pairs[0].ID)
+	assert.Equal(t, tenantID, pairs[0].TenantID)
+	assert.True(t, pairs[0].Active)
+	assert.Equal(t, []byte("pub"), pairs[0].PublicKey)
+}
+
+// TestJWKRepository_GetAllPublic_UnderRLS_TenantIsolation confirms the tenant context
+// scopes the read rather than disabling the policy — one tenant never sees another's key.
+func TestJWKRepository_GetAllPublic_UnderRLS_TenantIsolation(t *testing.T) {
+	db, cleanup := setupPostgresRLS(t)
+	defer cleanup()
+
+	repo := NewJWKRepository(db)
+	ctx := context.Background()
+
+	const tenantA = "4aa2670c-2a50-5851-a4e4-f4931e6f49e5"
+	const tenantB = "6b13f81e-1c4d-4a2b-9f3e-2d5c8a7b4e10"
+
+	kidA := uuid.New().String()
+	kpA, err := jwk.NewKeyPair(kidA, tenantA, jwk.RSA, "RS256", []byte("privA"), []byte("pubA"))
+	require.NoError(t, err)
+	require.NoError(t, repo.Store(ctx, kpA))
+
+	kpB, err := jwk.NewKeyPair(uuid.New().String(), tenantB, jwk.RSA, "RS256", []byte("privB"), []byte("pubB"))
+	require.NoError(t, err)
+	require.NoError(t, repo.Store(ctx, kpB))
+
+	pairs, err := repo.GetAllPublic(ctx, tenantA)
+	require.NoError(t, err)
+	require.Len(t, pairs, 1)
+	assert.Equal(t, kidA, pairs[0].ID)
+}
+
 func TestJWKRepository_TenantIsolation(t *testing.T) {
 	db, cleanup := setupPostgres(t)
 	defer cleanup()
