@@ -32,21 +32,23 @@ func NewRefreshTokenRepository(db *sql.DB) *RefreshTokenRepository {
 var _ token.RefreshTokenRepository = (*RefreshTokenRepository)(nil)
 
 func (r *RefreshTokenRepository) Store(ctx context.Context, rt token.RefreshToken) error {
-	ctx, cancel := WithQueryTimeout(ctx)
-	defer cancel()
-	query := `INSERT INTO refresh_tokens (id, token, client_id, subject, tenant_id, scope, family_id, expires_at, created_at, rotated)
+	return WithTenantTx(ctx, r.db, rt.TenantID, func(tx *sql.Tx) error {
+		qCtx, cancel := WithQueryTimeout(ctx)
+		defer cancel()
+		query := `INSERT INTO refresh_tokens (id, token, client_id, subject, tenant_id, scope, family_id, expires_at, created_at, rotated)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET rotated = EXCLUDED.rotated, revoked_at = EXCLUDED.revoked_at`
 
-	hashed := hashRefreshToken(rt.Token)
-	_, err := r.db.ExecContext(ctx, query,
-		rt.ID, hashed, rt.ClientID, rt.Subject, rt.TenantID,
-		rt.Scope, rt.FamilyID, rt.ExpiresAt, rt.CreatedAt, rt.Rotated,
-	)
-	if err != nil {
-		return apperrors.Wrap(apperrors.ErrInternal, "failed to store refresh token", err)
-	}
-	return nil
+		hashed := hashRefreshToken(rt.Token)
+		_, err := tx.ExecContext(qCtx, query,
+			rt.ID, hashed, rt.ClientID, rt.Subject, rt.TenantID,
+			rt.Scope, rt.FamilyID, rt.ExpiresAt, rt.CreatedAt, rt.Rotated,
+		)
+		if err != nil {
+			return apperrors.Wrap(apperrors.ErrInternal, "failed to store refresh token", err)
+		}
+		return nil
+	})
 }
 
 func (r *RefreshTokenRepository) GetByToken(ctx context.Context, tok string) (token.RefreshToken, error) {

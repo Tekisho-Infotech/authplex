@@ -23,27 +23,29 @@ var _ jwk.Repository = (*JWKRepository)(nil)
 
 // Store persists a new key pair.
 func (r *JWKRepository) Store(ctx context.Context, kp jwk.KeyPair) error {
-	ctx, cancel := WithQueryTimeout(ctx)
-	defer cancel()
-	query := `INSERT INTO jwk_pairs (id, tenant_id, key_type, algorithm, key_use, private_key, public_key, active, created_at, expires_at)
+	return WithTenantTx(ctx, r.db, kp.TenantID, func(tx *sql.Tx) error {
+		qCtx, cancel := WithQueryTimeout(ctx)
+		defer cancel()
+		query := `INSERT INTO jwk_pairs (id, tenant_id, key_type, algorithm, key_use, private_key, public_key, active, created_at, expires_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
-	_, err := r.db.ExecContext(ctx, query,
-		kp.ID,
-		kp.TenantID,
-		string(kp.KeyType),
-		kp.Algorithm,
-		string(kp.Use),
-		kp.PrivateKey,
-		kp.PublicKey,
-		kp.Active,
-		kp.CreatedAt,
-		kp.ExpiresAt,
-	)
-	if err != nil {
-		return apperrors.Wrap(apperrors.ErrInternal, "failed to store key pair", err)
-	}
-	return nil
+		_, err := tx.ExecContext(qCtx, query,
+			kp.ID,
+			kp.TenantID,
+			string(kp.KeyType),
+			kp.Algorithm,
+			string(kp.Use),
+			kp.PrivateKey,
+			kp.PublicKey,
+			kp.Active,
+			kp.CreatedAt,
+			kp.ExpiresAt,
+		)
+		if err != nil {
+			return apperrors.Wrap(apperrors.ErrInternal, "failed to store key pair", err)
+		}
+		return nil
+	})
 }
 
 // GetActive returns the active key pair for a tenant.
